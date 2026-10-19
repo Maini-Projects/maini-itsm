@@ -69,7 +69,7 @@ def raw(db_conninfo):
 class FakeAuthAdmin:
     """Replaces Supabase's login-creation service."""
     def __init__(self, conninfo: str):
-        self.conninfo, self.created, self.deleted = conninfo, [], []
+        self.conninfo, self.created, self.deleted, self.passwords = conninfo, [], [], {}
 
     def create_user(self, email, password):
         new_id = uuid.uuid4()
@@ -78,17 +78,46 @@ class FakeAuthAdmin:
         self.created.append(new_id)
         return new_id
 
+    def set_password(self, user_id, password):
+        self.passwords[user_id] = password
+
     def delete_user(self, user_id):
         with psycopg.connect(self.conninfo, autocommit=True) as c:
             c.execute("delete from auth.users where id = %s", (user_id,))
         self.deleted.append(user_id)
 
 
+DEFAULT_PASSWORD = "password123"
+
+
+class FakeAuthClient:
+    """Replaces Supabase's password sign-in. Seeded users sign in as <key>@test.local with DEFAULT_PASSWORD
+    (unless FakeAuthAdmin.set_password changed it); the token is "t-<key>", the refresh token "r-<key>"."""
+    def __init__(self, admin: "FakeAuthAdmin"):
+        self.admin = admin
+
+    def login(self, email, password):
+        for key, uid in IDS.items():
+            if email == f"{key}@test.local":
+                if password != self.admin.passwords.get(uid, DEFAULT_PASSWORD):
+                    return None
+                return {"access_token": f"t-{key}", "refresh_token": f"r-{key}", "expires_in": 3600,
+                        "token_type": "bearer"}
+        return None
+
+    def refresh(self, refresh_token):
+        key = refresh_token.removeprefix("r-")
+        if key in IDS:
+            return {"access_token": f"t-{key}", "refresh_token": refresh_token, "expires_in": 3600,
+                    "token_type": "bearer"}
+        return None
+
+
 @pytest.fixture(scope="session")
 def app(db_conninfo):
     os.environ["DATABASE_URL"] = db_conninfo
     os.environ["CORS_ORIGINS"] = "http://localhost:5173"
-    from app.auth import get_auth_admin, get_token_verifier
+    from app.auth import get_auth_admin, get_auth_client, get_token_verifier
     from app.errors import api_error
     from app.main import app as fastapi_app
 
@@ -101,6 +130,7 @@ def app(db_conninfo):
     fake_admin = FakeAuthAdmin(db_conninfo)
     fastapi_app.dependency_overrides[get_token_verifier] = lambda: fake_verify
     fastapi_app.dependency_overrides[get_auth_admin] = lambda: fake_admin
+    fastapi_app.dependency_overrides[get_auth_client] = lambda: FakeAuthClient(fake_admin)
     fastapi_app.state.fake_auth_admin = fake_admin
     return fastapi_app
 
@@ -130,6 +160,7 @@ def clean(raw, app):
                    where s.priority::text = v.p""")
     app.state.fake_auth_admin.created.clear()
     app.state.fake_auth_admin.deleted.clear()
+    app.state.fake_auth_admin.passwords.clear()
 
 
 def as_user(who: str) -> dict:

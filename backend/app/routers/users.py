@@ -93,3 +93,17 @@ def update_user(user_id: UUID, body: UserPatch, admin: Principal = Depends(requi
     if updated is None:
         raise api_error(404, "not_found", "User not found.")
     return _get_user(conn, user_id)
+
+
+class PasswordReset(BaseModel):
+    new_password: str = Field(min_length=8, max_length=72)
+
+
+@router.post("/users/{user_id}/password")
+def reset_password(user_id: UUID, body: PasswordReset, _: Principal = Depends(require_roles("admin")),
+                   conn=Depends(get_conn), auth_admin: AuthAdmin = Depends(get_auth_admin)):
+    """Admin sets a new password for a user (for example when they forgot theirs)."""
+    if _get_user(conn, user_id) is None:
+        raise api_error(404, "not_found", "User not found.")
+    auth_admin.set_password(user_id, body.new_password)
+    return {"status": "ok"}

@@ -95,6 +95,26 @@ class AuthAdmin:
             raise api_error(502, "auth_error", "The login service rejected the request.")
         return UUID(resp.json()["id"])
 
+    def set_password(self, user_id: UUID, password: str) -> None:
+        settings = get_settings()
+        if not settings.supabase_url or not settings.supabase_service_role_key:
+            raise api_error(500, "auth_not_configured", "Supabase keys are not set on the server.")
+        key = settings.supabase_service_role_key
+        try:
+            resp = _client().put(
+                f"{settings.supabase_url}/auth/v1/admin/users/{user_id}",
+                headers={"Authorization": f"Bearer {key}", "apikey": key},
+                json={"password": password},
+            )
+        except httpx.HTTPError:
+            raise api_error(503, "auth_unavailable", "The login service could not be reached.")
+        if resp.status_code in (400, 422):
+            raise api_error(422, "weak_password", "That password is not accepted. Choose a longer or stronger one.")
+        if resp.status_code == 404:
+            raise api_error(404, "not_found", "Login not found.")
+        if resp.status_code >= 300:
+            raise api_error(502, "auth_error", "The login service rejected the request.")
+
     def delete_user(self, user_id: UUID) -> None:
         settings = get_settings()
         key = settings.supabase_service_role_key
@@ -109,3 +129,43 @@ class AuthAdmin:
 
 def get_auth_admin() -> AuthAdmin:
     return AuthAdmin()
+
+
+# ---- signing in on behalf of the front end ----------------------------------------------------
+
+class AuthClient:
+    """Password sign-in and token refresh against Supabase Auth. Replaced by a fake in tests.
+
+    The front end never talks to Supabase; it calls /auth/login and /auth/refresh on this API.
+    """
+
+    def _token_request(self, grant_type: str, payload: dict) -> dict | None:
+        settings = get_settings()
+        if not settings.supabase_url or not settings.supabase_anon_key:
+            raise api_error(500, "auth_not_configured", "SUPABASE_URL and SUPABASE_ANON_KEY are not set on the server.")
+        try:
+            resp = _client().post(
+                f"{settings.supabase_url}/auth/v1/token",
+                params={"grant_type": grant_type},
+                headers={"apikey": settings.supabase_anon_key},
+                json=payload,
+            )
+        except httpx.HTTPError:
+            raise api_error(503, "auth_unavailable", "The login service could not be reached.")
+        if resp.status_code in (400, 401, 403, 422):
+            return None
+        if resp.status_code >= 300:
+            raise api_error(502, "auth_error", "The login service rejected the request.")
+        body = resp.json()
+        return {k: body.get(k) for k in ("access_token", "refresh_token", "expires_in", "token_type")}
+
+    def login(self, email: str, password: str) -> dict | None:
+        """The session (tokens) for a correct email and password, otherwise None."""
+        return self._token_request("password", {"email": email, "password": password})
+
+    def refresh(self, refresh_token: str) -> dict | None:
+        return self._token_request("refresh_token", {"refresh_token": refresh_token})
+
+
+def get_auth_client() -> AuthClient:
+    return AuthClient()

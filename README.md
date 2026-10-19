@@ -1,7 +1,7 @@
 # Maini ITSM
 
 IT service management portal: incidents, problems, changes, releases, approvals, SLAs, audit.
-React front end (next step) -> FastAPI back end -> Supabase (Postgres + Auth), hosted on Render.
+React front end -> FastAPI back end -> Supabase (Postgres + Auth), hosted on Render.
 
 The front end only ever talks to the back end's REST API, so it can be replaced by any other
 technology without touching the back end or the database.
@@ -11,9 +11,11 @@ supabase/migrations/   the database: run in order (001, 002, ...) in the Supabas
 supabase/schema_checks.sql   59 rule checks for the database (see "Tests")
 backend/               FastAPI service (deployed on Render)
   app/main.py            app entry point, /healthz
-  app/routers/           reference (me, teams, services, SLA), users, incidents, approvals, dashboard
+  app/routers/           auth, reference (me, teams, services, SLA), users, incidents, problems, changes,
+                         releases, approvals, dashboard, reports, audit
   app/rbac.py            who may see what; app/auth.py login; app/errors.py error format
-  tests/                 38 automated tests
+  tests/                 70 automated tests
+frontend/              React + Vite web app (talks only to the back end's REST API)
 render.yaml            Render Blueprint for the back end
 ```
 
@@ -64,6 +66,21 @@ curl -s -X POST "https://<project-ref>.supabase.co/auth/v1/token?grant_type=pass
   -d '{"email":"<your email>","password":"<your password>"}'
 ```
 
+## Run the web app locally
+
+You need Node 20+. The back end must be running first (previous section).
+
+```powershell
+cd frontend
+copy .env.example .env      # VITE_API_URL=http://localhost:8000
+npm install
+npm run dev                 # http://localhost:5173, sign in with a Supabase user that has a profile
+npm run build               # production build into frontend/dist
+```
+
+The back end's `CORS_ORIGINS` must include the address the app runs on (default allows
+`http://localhost:5173` and `http://127.0.0.1:5173`).
+
 ## Set up the database (Supabase)
 
 1. SQL editor: run `supabase/migrations/001_foundation_schema.sql`, then `002_clear_resolved_at_on_reopen.sql`.
@@ -91,25 +108,32 @@ TEST_PG_ADMIN_URL="postgresql://postgres:<password>@localhost:5432/postgres" pyt
 psql -d <empty database> -f supabase/schema_checks.sql      # rolls back, leaves no data
 ```
 
-Verified: the database rules and all API role/team rules against a real Postgres 16, and the app
-starting under uvicorn. **Not yet verified:** the live Supabase sign-in and user-creation calls (tested
-against a pretend Supabase only), and the Render deployment.
+Verified: the database rules and all API role/team rules against a real Postgres 16, the app under
+uvicorn, and every endpoint the web app calls over real HTTP with browser CORS headers (Supabase sign-in
+replaced by a stand-in). **Not yet verified:** the live Supabase sign-in, token refresh, password and
+user-creation calls (tested against a pretend Supabase only), and the Render deployment.
 
-## API overview (all under `/api/v1`, all need `Authorization: Bearer <token>`)
+## API overview (all under `/api/v1`; everything except `/auth/login`, `/auth/refresh` and `/healthz` needs `Authorization: Bearer <token>`)
 
 | Area | Endpoints |
 |---|---|
+| Sign in | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/password` (change own) |
 | Session | `GET /me` (role, team, menu to show) |
 | Reference | `GET /teams`, `GET/POST/PATCH /services`, `GET/PUT /sla` |
-| Users (admin) | `GET/POST /users`, `PATCH /users/{id}`, `GET /users/assignable` |
+| Users (admin) | `GET/POST /users`, `PATCH /users/{id}`, `POST /users/{id}/password`, `GET /users/assignable` |
 | Incidents | `GET/POST /incidents`, `GET/PATCH /incidents/{id}`, `POST .../assign`, `POST .../transition`, `GET/POST .../comments`, `GET .../activity` |
+| Problems | `GET/POST /problems`, `GET/PATCH /problems/{id}`, `POST .../assign`, `POST .../transition`, `POST .../incidents`, `DELETE .../incidents/{incident_id}`, `GET .../activity` |
+| Changes (manager, admin) | `GET/POST /changes`, `GET/PATCH /changes/{id}`, `POST .../transition`, `GET .../activity` |
+| Releases (manager, admin) | `GET/POST /releases`, `GET/PATCH /releases/{id}`, `POST .../transition`, `POST .../changes`, `DELETE .../changes/{change_id}`, `GET .../activity` |
 | Approvals | `GET /approvals`, `POST /approvals/{id}/decision` |
 | Dashboard | `GET /dashboard/summary` |
+| Reports (manager, admin) | `GET /reports`, `GET /reports/{key}` (add `?format=csv` to download) |
+| Audit (admin) | `GET /audit` (filters: table, record, action, actor_id, since, until) |
 | System | `GET /healthz` (no login) |
 
 Every error looks like `{"error": {"code": "...", "message": "..."}}`.
 
 ## Not built yet
 
-Problems, changes, releases, reports and audit-history endpoints (the database already supports
-them), the React front end, email notifications, and the self-registration screen.
+Email notifications and the self-registration screen. Deploying the front end (for example as a Render
+static site with `npm run build`, publish directory `dist`, and `VITE_API_URL` set to the API address).

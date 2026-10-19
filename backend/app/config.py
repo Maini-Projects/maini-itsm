@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
 
     # Comma-separated list of front-end addresses allowed to call the API from a browser
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # How long a verified login token is trusted before Supabase is asked again
     token_cache_seconds: int = 30

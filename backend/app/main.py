@@ -8,7 +8,8 @@ from fastapi.responses import JSONResponse
 from . import db
 from .config import get_settings
 from .errors import register_error_handlers
-from .routers import approvals, dashboard, incidents, reference, users
+from .routers import (approvals, audit, auth_routes, changes, dashboard, incidents, problems, reference, releases,
+                      reports, users)
 
 
 @asynccontextmanager
@@ -30,7 +31,8 @@ app.add_middleware(
 )
 
 API = "/api/v1"
-for module in (reference, users, incidents, approvals, dashboard):
+for module in (auth_routes, reference, users, incidents, problems, changes, releases, approvals, dashboard, reports,
+               audit):
     app.include_router(module.router, prefix=API)
 
 
