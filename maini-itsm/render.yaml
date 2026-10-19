@@ -1,0 +1,22 @@
+# Render Blueprint: New > Blueprint > pick the GitHub repository.
+# Render asks for the values marked sync:false; paste them there (they are not stored in this file).
+services:
+  - type: web
+    name: maini-itsm-api
+    runtime: python
+    rootDir: backend
+    plan: free                      # free services sleep when idle; the first request after a pause is slow
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false                 # the address of the deployed front end, once it exists
