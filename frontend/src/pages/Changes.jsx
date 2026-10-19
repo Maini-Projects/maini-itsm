@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import ApprovalBox from '../components/ApprovalBox'
@@ -14,13 +14,16 @@ const TYPES = ['Standard', 'Normal', 'Emergency']
 const LIMIT = 25
 
 export function ChangeList() {
+  const { me } = useAuth()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [type, setType] = useState('')
   const [status, setStatus] = useState('')
   const [risk, setRisk] = useState('')
   const [offset, setOffset] = useState(0)
-  const [creating, setCreating] = useState(false)
+  const [sp, setSp] = useSearchParams()
+  const [creating, setCreating] = useState(sp.get('new') === '1' && me.role !== 'employee')
+  useEffect(() => { if (sp.get('new')) { sp.delete('new'); setSp(sp, { replace: true }) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const dq = useDebounced(q)
   useEffect(() => setOffset(0), [dq, type, status, risk])
   const { data, error, loading } = useFetch(() => api.get('/changes', { q: dq.trim(), type, status, risk, limit: LIMIT, offset }), [dq, type, status, risk, offset])
@@ -28,7 +31,7 @@ export function ChangeList() {
     <>
       <div className="eyebrow">Change Management</div>
       <h2 className="title">Change Requests</h2>
-      <p className="sub">Standard, normal and emergency changes with risk, approval and scheduling. Managers raise changes; an admin approves them.</p>
+      <p className="sub">Standard, normal and emergency changes with risk, approval and scheduling. Managers raise changes; an admin approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
         <div className="filters">
           <input placeholder="Search changes" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search changes" />
@@ -36,7 +39,7 @@ export function ChangeList() {
           <select value={risk} onChange={(e) => setRisk(e.target.value)} aria-label="Risk"><option value="">All risks</option>{LEVELS.map((t) => <option key={t}>{t}</option>)}</select>
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
         </div>
-        <button className="btn" onClick={() => setCreating(true)}>+ New Change</button>
+        {me.role !== 'employee' ? <button className="btn" onClick={() => setCreating(true)}>+ New Change</button> : <span />}
       </div>
       <ErrorBox error={error} />
       <div className="card table">

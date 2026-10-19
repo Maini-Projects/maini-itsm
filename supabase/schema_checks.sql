@@ -81,7 +81,7 @@ select t.check('priority change recomputes SLA clocks',
   (select priority = 'P4' and resolution_due - created_at = interval '5 days'
      from incidents where id='10000000-0000-0000-0000-000000000006'));
 
--- ---- P1 incident A: manager works it, admin approves ----------------------
+-- ---- P1 incident A: manager works it, admin closes it directly (no approval) ----
 select t.fails('cannot skip New -> Closed',
   $$update incidents set status='Closed' where id='10000000-0000-0000-0000-000000000001'$$, 'invalid_transition');
 select t.fails('Assigned needs an assignee',
@@ -100,57 +100,34 @@ update incidents set status='Resolved', resolution_notes='Restarted the posting 
   where id='10000000-0000-0000-0000-000000000001';
 select t.check('Resolved stamps resolved_at',
   (select resolved_at is not null from incidents where id='10000000-0000-0000-0000-000000000001'));
-select t.fails('P1 cannot close without approval',
-  $$update incidents set status='Closed' where id='10000000-0000-0000-0000-000000000001'$$, 'approval_required');
-update incidents set status='Pending Approval', updated_by='00000000-0000-0000-0000-0000000000b1'
+select t.fails('Pending Approval is no longer an incident status',
+  $$update incidents set status='Pending Approval' where id='10000000-0000-0000-0000-000000000001'$$, 'invalid_transition');
+update incidents set status='Closed', updated_by='00000000-0000-0000-0000-0000000000a1'
   where id='10000000-0000-0000-0000-000000000001';
-select t.check('P1 resolution opens a manager approval for the right team',
-  (select count(*) = 1 from approvals a join incidents i on i.id = a.record_id
-    where a.record_id='10000000-0000-0000-0000-000000000001' and a.status='pending'
-      and a.approver_role='manager' and a.team_id = i.team_id
-      and a.requested_by='00000000-0000-0000-0000-0000000000b1'));
-select t.fails('requester cannot approve own request',
-  $$update approvals set status='approved', decided_by='00000000-0000-0000-0000-0000000000b1' where record_id='10000000-0000-0000-0000-000000000001'$$, 'self_approval');
-select t.fails('manager of the other team cannot approve',
-  $$update approvals set status='approved', decided_by='00000000-0000-0000-0000-0000000000b2' where record_id='10000000-0000-0000-0000-000000000001'$$, 'forbidden');
-select t.fails('employee cannot approve',
-  $$update approvals set status='approved', decided_by='00000000-0000-0000-0000-0000000000c1' where record_id='10000000-0000-0000-0000-000000000001'$$, 'forbidden');
-update approvals set status='approved', decided_by='00000000-0000-0000-0000-0000000000a1', comment='ok'
-  where record_id='10000000-0000-0000-0000-000000000001';
-select t.check('approval closes the incident',
-  (select status = 'Closed' and closed_at is not null from incidents where id='10000000-0000-0000-0000-000000000001'));
-select t.check('approval records who and when',
-  (select status = 'approved' and decided_at is not null and decided_by='00000000-0000-0000-0000-0000000000a1'
-     from approvals where record_id='10000000-0000-0000-0000-000000000001'));
+select t.check('P1 closes directly: Closed, closed_at stamped, no approval created',
+  (select status = 'Closed' and closed_at is not null from incidents where id='10000000-0000-0000-0000-000000000001')
+  and (select count(*) = 0 from approvals where record_type = 'incident'));
 
--- ---- P1 incident B: admin works it, own-team manager approves -------------
+-- ---- P1 incident B: admin works it and closes it ---------------------------
 update incidents set status='Assigned', assignee_id='00000000-0000-0000-0000-0000000000a1', updated_by='00000000-0000-0000-0000-0000000000a1' where id='10000000-0000-0000-0000-000000000002';
 update incidents set status='In Progress' where id='10000000-0000-0000-0000-000000000002';
 update incidents set status='Resolved', resolution_notes='Patched.' where id='10000000-0000-0000-0000-000000000002';
-update incidents set status='Pending Approval', updated_by='00000000-0000-0000-0000-0000000000a1' where id='10000000-0000-0000-0000-000000000002';
-select t.fails('other team manager cannot approve incident B',
-  $$update approvals set status='approved', decided_by='00000000-0000-0000-0000-0000000000b2' where record_id='10000000-0000-0000-0000-000000000002'$$, 'forbidden');
-update approvals set status='approved', decided_by='00000000-0000-0000-0000-0000000000b1' where record_id='10000000-0000-0000-0000-000000000002';
-select t.check('own-team manager can approve (incident B closed)',
+update incidents set status='Closed' where id='10000000-0000-0000-0000-000000000002';
+select t.check('admin-worked P1 closes directly too',
   (select status = 'Closed' from incidents where id='10000000-0000-0000-0000-000000000002'));
 
--- ---- P1 incident C: rejection sends it back to In Progress ----------------
+-- ---- P1 incident C: a resolved P1 can be reopened --------------------------
 update incidents set status='Assigned', assignee_id='00000000-0000-0000-0000-0000000000b1', updated_by='00000000-0000-0000-0000-0000000000b1' where id='10000000-0000-0000-0000-000000000003';
 update incidents set status='In Progress' where id='10000000-0000-0000-0000-000000000003';
 update incidents set status='Resolved', resolution_notes='Maybe fixed.' where id='10000000-0000-0000-0000-000000000003';
-update incidents set status='Pending Approval', updated_by='00000000-0000-0000-0000-0000000000b1' where id='10000000-0000-0000-0000-000000000003';
-update approvals set status='rejected', decided_by='00000000-0000-0000-0000-0000000000a1', comment='Not verified' where record_id='10000000-0000-0000-0000-000000000003';
-select t.check('rejection returns the incident to In Progress and clears resolved_at (migration 002)',
+update incidents set status='In Progress' where id='10000000-0000-0000-0000-000000000003';
+select t.check('reopening a resolved P1 returns it to In Progress and clears resolved_at',
   (select status = 'In Progress' and resolved_at is null from incidents where id='10000000-0000-0000-0000-000000000003'));
-select t.check('a decided approval does not block a new one',
-  (select count(*) from approvals where record_id='10000000-0000-0000-0000-000000000003' and status='pending') = 0);
 
--- ---- P3 incident D: no approval needed ------------------------------------
+-- ---- P3 incident D: closes directly -----------------------------------------
 update incidents set status='Assigned', assignee_id='00000000-0000-0000-0000-0000000000b2' where id='10000000-0000-0000-0000-000000000004';
 update incidents set status='In Progress' where id='10000000-0000-0000-0000-000000000004';
 update incidents set status='Resolved', resolution_notes='Reset password.' where id='10000000-0000-0000-0000-000000000004';
-select t.fails('P3 cannot go to Pending Approval',
-  $$update incidents set status='Pending Approval' where id='10000000-0000-0000-0000-000000000004'$$, 'approval_not_needed');
 update incidents set status='Closed' where id='10000000-0000-0000-0000-000000000004';
 select t.check('P3 closes directly with no approval row',
   (select status = 'Closed' from incidents where id='10000000-0000-0000-0000-000000000004')
@@ -180,6 +157,36 @@ update problems set status='Closed' where id='20000000-0000-0000-0000-0000000000
 select t.check('problem walks all six states with no approval',
   (select status = 'Closed' from problems where id='20000000-0000-0000-0000-000000000001')
   and (select count(*) = 0 from approvals where record_type = 'problem'));
+
+-- ---- defects: anyone raises, manager works, no approval --------------------
+insert into defects(id, title, raised_by, severity) values
+  ('50000000-0000-0000-0000-000000000001','Totals wrong','00000000-0000-0000-0000-0000000000c1','High');
+select t.check('defect gets DEF- number, reporter team and starts New',
+  (select number like 'DEF-%' and status = 'New' and team_id = (select id from teams where name='Development')
+     from defects where id='50000000-0000-0000-0000-000000000001'));
+select t.fails('defect cannot skip New -> Closed',
+  $$update defects set status='Closed' where id='50000000-0000-0000-0000-000000000001'$$, 'invalid_transition');
+select t.fails('defect Assigned needs an assignee',
+  $$update defects set status='Assigned' where id='50000000-0000-0000-0000-000000000001'$$, 'assignee_required');
+update defects set status='Assigned', assignee_id='00000000-0000-0000-0000-0000000000b1', updated_by='00000000-0000-0000-0000-0000000000b1' where id='50000000-0000-0000-0000-000000000001';
+update defects set status='In Progress' where id='50000000-0000-0000-0000-000000000001';
+select t.fails('defect Resolved needs resolution notes',
+  $$update defects set status='Resolved' where id='50000000-0000-0000-0000-000000000001'$$, 'resolution_notes_required');
+update defects set status='Resolved', resolution_notes='Rounded correctly.' where id='50000000-0000-0000-0000-000000000001';
+select t.check('defect Resolved stamps resolved_at',
+  (select resolved_at is not null from defects where id='50000000-0000-0000-0000-000000000001'));
+update defects set status='In Progress' where id='50000000-0000-0000-0000-000000000001';
+select t.check('reopening a defect clears resolved_at',
+  (select status = 'In Progress' and resolved_at is null from defects where id='50000000-0000-0000-0000-000000000001'));
+update defects set status='Resolved', resolution_notes='Fixed for real.' where id='50000000-0000-0000-0000-000000000001';
+update defects set status='Closed', updated_by='00000000-0000-0000-0000-0000000000b1' where id='50000000-0000-0000-0000-000000000001';
+select t.check('defect closes directly: closed_at stamped, no approval row',
+  (select status = 'Closed' and closed_at is not null from defects where id='50000000-0000-0000-0000-000000000001')
+  and (select count(*) = 0 from approvals where record_id='50000000-0000-0000-0000-000000000001'));
+select t.check('audit log records defect changes with actor',
+  exists (select 1 from audit_log where table_name = 'defects' and record_id = '50000000-0000-0000-0000-000000000001' and action = 'UPDATE'
+            and actor_id = '00000000-0000-0000-0000-0000000000b1'
+            and old_values ->> 'status' = 'Resolved' and new_values ->> 'status' = 'Closed'));
 
 -- ---- changes: manager raises, admin approves ------------------------------
 select t.fails('employee cannot raise a change',
@@ -255,7 +262,7 @@ select t.check('audit log records incident status changes with actor and old/new
   exists (select 1 from audit_log
            where table_name = 'incidents' and record_id = '10000000-0000-0000-0000-000000000001'
              and action = 'UPDATE' and actor_id = '00000000-0000-0000-0000-0000000000a1'
-             and old_values ->> 'status' = 'Pending Approval' and new_values ->> 'status' = 'Closed'));
+             and old_values ->> 'status' = 'Resolved' and new_values ->> 'status' = 'Closed'));
 select t.check('audit log records approvals and creations',
   exists (select 1 from audit_log where table_name = 'approvals')
   and exists (select 1 from audit_log where table_name = 'incidents' and action = 'INSERT'));

@@ -17,8 +17,9 @@ from ..rbac import Principal, require_roles, visibility
 
 router = APIRouter(tags=["reports"])
 
-NOT_OPEN = "('Resolved','Pending Approval','Closed')"
+NOT_OPEN = "('Resolved','Closed')"
 ROW_LIMIT = 5000
+PRIORITY_NAMES = {"P1": "Critical", "P2": "High", "P3": "Medium", "P4": "Low"}
 
 
 def col(key: str, label: str) -> dict:
@@ -113,6 +114,38 @@ def open_problems(conn, user):
     return cols, rows, None
 
 
+def open_defects(conn, user):
+    vis, vp = visibility(user, alias="d", owner_col="raised_by", assignee_col="assignee_id")
+    rows = fetch_all(
+        conn,
+        f"""select d.number, d.title, d.severity::text as severity, d.environment::text as environment, d.status,
+                   s.name as service_name, t.name as team_name, asg.full_name as assignee_name, d.created_at
+              from defects d left join services s on s.id = d.service_id left join teams t on t.id = d.team_id
+              left join profiles asg on asg.id = d.assignee_id
+             where {vis} and d.status not in ('Resolved','Closed')
+             order by array_position(array['Critical','High','Medium','Low'], d.severity::text), d.created_at
+             limit {ROW_LIMIT}""",
+        vp)
+    cols = [col("number", "Defect"), col("title", "Title"), col("severity", "Severity"),
+            col("environment", "Environment"), col("status", "Status"), col("service_name", "Service"),
+            col("team_name", "Team"), col("assignee_name", "Assignee"), col("created_at", "Created")]
+    return cols, rows, None
+
+
+def defects_by_severity(conn, user):
+    vis, vp = visibility(user, alias="d", owner_col="raised_by", assignee_col="assignee_id")
+    rows = fetch_all(
+        conn,
+        f"""select d.severity::text as severity, count(*) as total,
+                   count(*) filter (where d.status not in ('Resolved','Closed')) as open_count
+              from defects d where {vis} group by 1
+             order by array_position(array['Critical','High','Medium','Low'], d.severity::text)""",
+        vp)
+    cols = [col("severity", "Severity"), col("total", "Defects"), col("open_count", "Open")]
+    return cols, rows, {"label": "Defects by severity", "labels": [r["severity"] for r in rows],
+                        "values": [r["total"] for r in rows]}
+
+
 def changes_by_status(conn, user):
     vis, vp = visibility(user, alias="c", owner_col="requester_id", assignee_col=None)
     rows = fetch_all(
@@ -168,6 +201,8 @@ REPORTS: dict[str, tuple[str, str, Callable]] = {
     "incidents_by_service": ("Incidents by service", "Incidents", by_service),
     "sla_breaches": ("Open incidents past their SLA", "SLA", sla_breaches),
     "open_problems": ("Open problems", "Problems", open_problems),
+    "open_defects": ("Open defects", "Defects", open_defects),
+    "defects_by_severity": ("Defects by severity", "Defects", defects_by_severity),
     "changes_by_status": ("Changes by status", "Changes", changes_by_status),
     "upcoming_releases": ("Releases not yet closed", "Releases", upcoming_releases),
     "pending_approvals": ("Pending approvals", "Governance", pending_approvals),
@@ -195,6 +230,11 @@ def run_report(key: str, format: Literal["json", "csv"] = "json", user: Principa
         raise api_error(404, "not_found", "Report not found.")
     title, category, fn = REPORTS[key]
     columns, rows, chart = fn(conn, user)
+    for r in rows:  # priorities are shown as Critical / High / Medium / Low
+        if r.get("priority") in PRIORITY_NAMES:
+            r["priority"] = PRIORITY_NAMES[r["priority"]]
+    if chart:
+        chart["labels"] = [PRIORITY_NAMES.get(label, label) for label in chart["labels"]]
     if format == "csv":
         out = io.StringIO()
         writer = csv.writer(out)

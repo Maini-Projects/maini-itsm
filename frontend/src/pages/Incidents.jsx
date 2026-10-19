@@ -3,12 +3,11 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import {
-  Badge, Empty, ErrorBox, Field, FormModal, Loading, Pager, PersonSelect, Priority, SlaCell, StatusBadge, Text,
+  Badge, Empty, ErrorBox, Field, FormModal, Loading, OpenFor, PRIORITIES, Pager, PersonSelect, Priority, StatusBadge, Text,
   Timeline, Workflow, fmtDate, useAction, useDebounced, useFetch,
 } from '../components/ui'
 
-const STATUSES = ['New', 'Assigned', 'In Progress', 'Pending', 'Resolved', 'Pending Approval', 'Closed']
-const LEVELS = ['High', 'Medium', 'Low']
+const STATUSES = ['New', 'Assigned', 'In Progress', 'Pending', 'Resolved', 'Closed']
 const LIMIT = 25
 
 // ---- list ----------------------------------------------------------------------------------
@@ -50,7 +49,7 @@ export function IncidentList() {
         <div className="filters">
           <input placeholder="Search incidents" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search incidents" />
           <select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority">
-            <option value="">All priorities</option>{['P1', 'P2', 'P3', 'P4'].map((p) => <option key={p}>{p}</option>)}
+            <option value="">All priorities</option>{[...PRIORITIES].reverse().map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
             <option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
@@ -67,14 +66,14 @@ export function IncidentList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Incident</th><th>Short Description</th><th>Service</th><th>Priority</th><th>Team</th><th>Assignee</th><th>Status</th><th>SLA</th></tr></thead>
+          <thead><tr><th>Incident</th><th>Short Description</th><th>Service</th><th>Priority</th><th>Team</th><th>Assignee</th><th>Status</th><th>Open For</th></tr></thead>
           <tbody>
             {data?.items.map((i) => (
               <tr key={i.id}>
                 <td><Link className="link" to={`/incidents/${i.id}`}>{i.number}</Link></td>
                 <td><b>{i.short_description}</b>{i.major_incident && <> <Badge tone="red">Major</Badge></>}</td>
                 <td>{i.service_name || '—'}</td><td><Priority p={i.priority} /></td><td>{i.team_name || '—'}</td>
-                <td>{i.assignee_name || '—'}</td><td><StatusBadge status={i.status} /></td><td><SlaCell inc={i} /></td>
+                <td>{i.assignee_name || '—'}</td><td><StatusBadge status={i.status} /></td><td><OpenFor inc={i} /></td>
               </tr>
             ))}
           </tbody>
@@ -92,7 +91,7 @@ function NewIncident({ onClose, onCreated }) {
   const { me } = useAuth()
   const services = useFetch(() => api.get('/services'))
   const people = useFetch(() => (me.role === 'admin' ? api.get('/users') : []), [me.role])
-  const [f, setF] = useState({ short_description: '', description: '', service_id: '', impact: 'Medium', urgency: 'Medium', requester_id: '' })
+  const [f, setF] = useState({ short_description: '', description: '', service_id: '', priority: 'P3', requester_id: '' })
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
   const submit = async () => {
     const body = { ...f, service_id: f.service_id || null, requester_id: f.requester_id || null }
@@ -117,9 +116,9 @@ function NewIncident({ onClose, onCreated }) {
             </select>
           </Field>
         )}
-        <Field label="Impact"><select value={f.impact} onChange={set('impact')}>{LEVELS.map((l) => <option key={l}>{l}</option>)}</select></Field>
-        <Field label="Urgency"><select value={f.urgency} onChange={set('urgency')}>{LEVELS.map((l) => <option key={l}>{l}</option>)}</select></Field>
-        <Field label="Description" wide hint="Priority (P1–P4) is worked out automatically from impact and urgency."><textarea value={f.description} onChange={set('description')} /></Field>
+        <Field label="Priority"><select value={f.priority} onChange={set('priority')}>{PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+        <div />
+        <Field label="Description" wide><textarea value={f.description} onChange={set('description')} /></Field>
       </div>
     </FormModal>
   )
@@ -129,7 +128,6 @@ function NewIncident({ onClose, onCreated }) {
 function nextActions(inc, me) {
   const out = []
   const staff = inc.can_manage
-  const highPriority = inc.priority === 'P1' || inc.priority === 'P2'
   if (staff) {
     if (inc.status === 'Assigned') out.push({ label: 'Start work', to: 'In Progress' })
     if (inc.status === 'In Progress') {
@@ -138,11 +136,11 @@ function nextActions(inc, me) {
     }
     if (inc.status === 'Pending') out.push({ label: 'Resume work', to: 'In Progress' })
     if (inc.status === 'Resolved') {
-      out.push(highPriority ? { label: 'Send for approval', to: 'Pending Approval', primary: true } : { label: 'Close incident', to: 'Closed', primary: true })
+      out.push({ label: 'Close incident', to: 'Closed', primary: true })
       out.push({ label: 'Reopen', to: 'In Progress' })
     }
   } else if (inc.requester_id === me.id && inc.status === 'Resolved') {
-    if (!highPriority) out.push({ label: 'Confirm resolved (close)', to: 'Closed', primary: true })
+    out.push({ label: 'Confirm resolved (close)', to: 'Closed', primary: true })
     out.push({ label: 'Reopen — not fixed', to: 'In Progress' })
   }
   return out
@@ -164,8 +162,7 @@ export function IncidentDetail() {
   const i = inc.data
   const refresh = () => { inc.reload(); activity.reload(); refreshCounts() }
   const move = (to, resolution_notes) => run(async () => { await api.post(`/incidents/${id}/transition`, { to_status: to, resolution_notes }); refresh() }, `Moved to ${to}.`)
-  const high = i.priority === 'P1' || i.priority === 'P2'
-  const steps = ['New', 'Assigned', 'In Progress', 'Resolved', ...(high ? ['Pending Approval'] : []), 'Closed']
+  const steps = ['New', 'Assigned', 'In Progress', 'Resolved', 'Closed']
   const current = i.status === 'Pending' ? 'In Progress' : i.status
   const actions = nextActions(i, me)
 
@@ -182,11 +179,12 @@ export function IncidentDetail() {
       <div className="detail">
         <div className="card">
           <div className="tabs">
-            {[['details', 'Details'], ['resolution', 'Resolution'], ['activity', 'Activity']].map(([k, label]) => (
+            {[['details', 'Details'], ['activity', 'Activity'], ['resolution', 'Resolution']].map(([k, label]) => (
               <button key={k} className={`tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{label}</button>
             ))}
           </div>
-          {tab === 'details' && <DetailsForm inc={i} me={me} onSaved={refresh} />}
+          {tab === 'details' && <DetailsForm inc={i} me={me} onSaved={refresh} statusActions={actions} statusBusy={busy}
+            onStatus={(a) => (a.notes ? setResolving(a) : move(a.to))} />}
           {tab === 'resolution' && (
             <div className="form"><Field label="Resolution notes" wide><Text value={i.resolution_notes} /></Field>
               {!i.resolution_notes && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 12, color: 'var(--muted)' }}>Notes are added when staff resolve the incident.</div>}
@@ -202,26 +200,18 @@ export function IncidentDetail() {
         <div>
           <div className="side">
             <h4>Summary</h4>
-            {[['Priority', <Priority key="p" p={i.priority} />], ['Impact / Urgency', `${i.impact} / ${i.urgency}`], ['Service', i.service_name || '—'],
-              ['Team', i.team_name || '—'], ['Requester', i.requester_name], ['Assignee', i.assignee_name || 'Unassigned'],
-              ['Response due', fmtDate(i.response_due)], ['Resolution due', fmtDate(i.resolution_due)],
-              ['SLA', <SlaCell key="s" inc={i} />], ['Created', fmtDate(i.created_at)], ['Resolved', fmtDate(i.resolved_at)]].map(([k, v]) => (
+            {[['Priority', <Priority key="p" p={i.priority} />], ['Status', <StatusBadge key="st" status={i.status} />],
+              ['Assignee', i.assignee_name || 'Unassigned'], ['Requester', i.requester_name], ['Service', i.service_name || '—'],
+              ['Open for', <OpenFor key="o" inc={i} />], ['Created', fmtDate(i.created_at)],
+              ['Team', i.team_name || '—'], ['Resolved', fmtDate(i.resolved_at)]].map(([k, v]) => (
               <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>
             ))}
           </div>
-          {(i.can_manage || actions.length > 0 || i.status === 'Pending Approval') && i.status !== 'Closed' && (
+          {(i.can_manage || actions.length > 0) && i.status !== 'Closed' && (
             <div className="side">
               <h4>Actions</h4>
               <div className="sideactions">
                 {i.can_manage && <AssignControl inc={i} people={assignable.data || []} run={run} busy={busy} onDone={refresh} />}
-                {actions.map((a) => (
-                  <button key={a.label} className={a.primary ? 'btn' : 'btn2'} disabled={busy}
-                    onClick={() => (a.notes ? setResolving(a) : move(a.to))}>{a.label}</button>
-                ))}
-                {i.status === 'Pending Approval' && (
-                  <div className="note">Waiting for approval before this {i.priority} incident can be closed.{' '}
-                    {me.role !== 'employee' && <Link className="link" to="/approvals">Open approvals</Link>}</div>
-                )}
                 {i.status === 'New' && i.can_manage && !i.assignee_id && <div className="note">Assign it to start work.</div>}
               </div>
             </div>
@@ -257,11 +247,13 @@ function ResolveModal({ onClose, onSubmit }) {
   )
 }
 
-function DetailsForm({ inc, me, onSaved }) {
+const statusLabel = (s) => (s === 'Pending' ? 'Pending (on hold)' : s)
+
+function DetailsForm({ inc, me, onSaved, statusActions, statusBusy, onStatus }) {
   const services = useFetch(() => api.get('/services'))
   const staff = inc.can_manage
   const canEdit = inc.status !== 'Closed' && (staff || (inc.requester_id === me.id && inc.status === 'New'))
-  const initial = () => ({ short_description: inc.short_description, description: inc.description || '', service_id: inc.service_id || '', impact: inc.impact, urgency: inc.urgency, major_incident: inc.major_incident })
+  const initial = () => ({ short_description: inc.short_description, description: inc.description || '', service_id: inc.service_id || '', priority: inc.priority, major_incident: inc.major_incident })
   const [f, setF] = useState(initial)
   const [run, busy] = useAction()
   useEffect(() => setF(initial()), [inc.updated_at]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -270,7 +262,7 @@ function DetailsForm({ inc, me, onSaved }) {
     e.preventDefault()
     const init = initial()
     const changes = {}
-    Object.keys(f).forEach((k) => { if (f[k] !== init[k] && (staff || !['impact', 'urgency', 'major_incident'].includes(k))) changes[k] = k === 'service_id' ? f[k] || null : f[k] })
+    Object.keys(f).forEach((k) => { if (f[k] !== init[k] && (staff || !['priority', 'major_incident'].includes(k))) changes[k] = k === 'service_id' ? f[k] || null : f[k] })
     if (!Object.keys(changes).length) return
     run(async () => { await api.patch(`/incidents/${inc.id}`, changes); onSaved() }, 'Incident updated.')
   }
@@ -281,8 +273,14 @@ function DetailsForm({ inc, me, onSaved }) {
       <Field label="Short description" wide>{ro ? <Text value={inc.short_description} /> : <input value={f.short_description} onChange={set('short_description')} minLength={3} required />}</Field>
       <Field label="Service">{ro ? <Text value={inc.service_name} /> : <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{svc.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}</Field>
       <Field label="Major incident">{staff && canEdit ? <label className="checkrow"><input type="checkbox" checked={f.major_incident} onChange={set('major_incident')} /> Flag as major incident</label> : <Text value={inc.major_incident ? 'Yes' : 'No'} />}</Field>
-      <Field label="Impact">{staff && canEdit ? <select value={f.impact} onChange={set('impact')}>{LEVELS.map((l) => <option key={l}>{l}</option>)}</select> : <Text value={inc.impact} />}</Field>
-      <Field label="Urgency">{staff && canEdit ? <select value={f.urgency} onChange={set('urgency')}>{LEVELS.map((l) => <option key={l}>{l}</option>)}</select> : <Text value={inc.urgency} />}</Field>
+      <Field label="Status" hint={statusActions.length === 0 ? (inc.status === 'Closed' ? 'This incident is closed.' : inc.status === 'New' && staff ? 'Assign it to start work.' : 'No status changes are available to you.') : 'Pick the next status to move it on.'}>
+        <select value={inc.status} disabled={statusBusy || statusActions.length === 0}
+          onChange={(e) => { const a = statusActions.find((x) => x.to === e.target.value); if (a) onStatus(a) }}>
+          <option value={inc.status}>{statusLabel(inc.status)}</option>
+          {[...new Map(statusActions.map((a) => [a.to, a])).values()].map((a) => <option key={a.to} value={a.to}>{statusLabel(a.to)}</option>)}
+        </select>
+      </Field>
+      <Field label="Priority">{staff && canEdit ? <select value={f.priority} onChange={set('priority')}>{PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select> : <Priority p={inc.priority} />}</Field>
       <Field label="Description" wide>{ro ? <Text value={inc.description} /> : <textarea value={f.description} onChange={set('description')} />}</Field>
       {!ro && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
       {ro && inc.status !== 'Closed' && !staff && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>You can edit your incident while it is New. After that, the support team works on it — add a note in Activity to update them.</div>}

@@ -1,6 +1,6 @@
 # Maini ITSM
 
-IT service management portal: incidents, problems, changes, releases, approvals, SLAs, audit.
+IT service management portal: incidents, problems, defects, changes, releases, approvals, SLAs, audit.
 React front end -> FastAPI back end -> Supabase (Postgres + Auth), hosted on Render.
 
 The front end only ever talks to the back end's REST API, so it can be replaced by any other
@@ -11,10 +11,10 @@ supabase/migrations/   the database: run in order (001, 002, ...) in the Supabas
 supabase/schema_checks.sql   59 rule checks for the database (see "Tests")
 backend/               FastAPI service (deployed on Render)
   app/main.py            app entry point, /healthz
-  app/routers/           auth, reference (me, teams, services, SLA), users, incidents, problems, changes,
-                         releases, approvals, dashboard, reports, audit
+  app/routers/           auth, reference (me, teams, services, SLA), users, incidents, problems, defects,
+                         changes, releases, approvals, dashboard, reports, audit
   app/rbac.py            who may see what; app/auth.py login; app/errors.py error format
-  tests/                 70 automated tests
+  tests/                 87 automated tests
 frontend/              React + Vite web app (talks only to the back end's REST API)
 render.yaml            Render Blueprint for the back end
 ```
@@ -24,18 +24,19 @@ render.yaml            Render Blueprint for the back end
 | | Employee | Manager | Admin |
 |---|---|---|---|
 | Sees incidents | only their own | their team's, plus any they raised or are assigned | all |
-| Raises incidents / problems | yes | yes | yes (also on someone's behalf) |
+| Raises incidents / problems / defects | yes | yes | yes (incidents also on someone's behalf) |
 | Works incidents (assign, edit, move on) | confirms or reopens own resolved incident | their team's | all |
-| Approves P1/P2 incident closure | no | own team, never their own work | yes |
+| Sees changes and releases | all, read-only | all (edits only their team's) | all |
 | Raises changes and releases | no | yes | yes |
 | Approves changes and releases | no | no | yes |
 | Users, services, SLA targets | no | no | yes |
 
 Two teams: Development and Support. Each team has at most one manager.
 
-Incident workflow: New, Assigned, In Progress, (Pending), Resolved, Closed. P1/P2 go
-Resolved -> Pending Approval -> Closed (approval) or back to In Progress (rejection). P3/P4 close
-directly. The database enforces this, so no client can bypass it.
+Incident workflow: New, Assigned, In Progress, (Pending), Resolved, Closed. Every priority closes directly
+from Resolved; incidents, problems and defects need no approval. Defects (bugs found in a service) follow the
+same steps as incidents, with a severity (Critical, High, Medium, Low) and an environment instead of SLA clocks. Only changes and releases are approved (by an admin).
+The database enforces this, so no client can bypass it.
 
 ## Run it locally
 
@@ -83,7 +84,8 @@ The back end's `CORS_ORIGINS` must include the address the app runs on (default 
 
 ## Set up the database (Supabase)
 
-1. SQL editor: run `supabase/migrations/001_foundation_schema.sql`, then `002_clear_resolved_at_on_reopen.sql`.
+1. SQL editor: run `supabase/migrations/001_foundation_schema.sql`, then `002_clear_resolved_at_on_reopen.sql`,
+   then `003_remove_incident_approval.sql`, then `004_defects.sql`.
 2. Authentication > Users > Add user (auto-confirm), then give that login a profile:
    ```sql
    insert into profiles (id, email, full_name, role, team_id)
@@ -123,6 +125,7 @@ user-creation calls (tested against a pretend Supabase only), and the Render dep
 | Users (admin) | `GET/POST /users`, `PATCH /users/{id}`, `POST /users/{id}/password`, `GET /users/assignable` |
 | Incidents | `GET/POST /incidents`, `GET/PATCH /incidents/{id}`, `POST .../assign`, `POST .../transition`, `GET/POST .../comments`, `GET .../activity` |
 | Problems | `GET/POST /problems`, `GET/PATCH /problems/{id}`, `POST .../assign`, `POST .../transition`, `POST .../incidents`, `DELETE .../incidents/{incident_id}`, `GET .../activity` |
+| Defects | `GET/POST /defects`, `GET/PATCH /defects/{id}`, `POST .../assign`, `POST .../transition`, `GET/POST .../comments`, `GET .../activity` |
 | Changes (manager, admin) | `GET/POST /changes`, `GET/PATCH /changes/{id}`, `POST .../transition`, `GET .../activity` |
 | Releases (manager, admin) | `GET/POST /releases`, `GET/PATCH /releases/{id}`, `POST .../transition`, `POST .../changes`, `DELETE .../changes/{change_id}`, `GET .../activity` |
 | Approvals | `GET /approvals`, `POST /approvals/{id}/decision` |

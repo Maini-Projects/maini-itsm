@@ -22,7 +22,7 @@ export default function Approvals() {
       <div className="eyebrow">Governance</div>
       <h2 className="title">Approval Queue</h2>
       <p className="sub">
-        {me.role === 'admin' ? 'Changes, releases and P1/P2 incident sign-offs waiting for a decision.' : 'P1/P2 incident sign-offs for your team, and the status of changes and releases you raised.'}
+        {me.role === 'admin' ? 'Changes and releases waiting for your decision.' : 'The status of the changes and releases you raised. An admin decides them.'}
       </p>
       <div className="toolbar">
         <div className="filters">

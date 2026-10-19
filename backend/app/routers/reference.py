@@ -17,9 +17,10 @@ def me(user: Principal = Depends(current_user), conn=Depends(get_conn)):
     team = fetch_one(conn, "select name from teams where id = %(t)s", {"t": user.team_id}) if user.team_id else None
     org = fetch_one(conn, "select value from settings where key = 'organization_name'")
     menus = {
-        "employee": ["dashboard", "incidents", "problems"],
-        "manager": ["dashboard", "incidents", "problems", "changes", "releases", "approvals", "services", "reports"],
-        "admin": ["dashboard", "incidents", "problems", "changes", "releases", "approvals", "services", "sla",
+        "employee": ["dashboard", "incidents", "problems", "defects", "changes", "releases"],
+        "manager": ["dashboard", "incidents", "problems", "defects", "changes", "releases", "approvals", "services",
+                    "reports"],
+        "admin": ["dashboard", "incidents", "problems", "defects", "changes", "releases", "approvals", "services", "sla",
                   "reports", "audit", "admin"],
     }
     return {
@@ -59,7 +60,7 @@ def list_services(_: Principal = Depends(current_user), conn=Depends(get_conn)):
         conn,
         """select s.id, s.name, s.description, s.criticality, s.active, s.owner_team_id, t.name as owner_team_name,
                   (select count(*) from incidents i where i.service_id = s.id
-                     and i.status not in ('Resolved','Pending Approval','Closed')) as open_incidents
+                     and i.status not in ('Resolved','Closed')) as open_incidents
            from services s left join teams t on t.id = s.owner_team_id
            order by s.name""",
     )

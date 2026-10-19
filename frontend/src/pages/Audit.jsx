@@ -3,7 +3,7 @@ import { api } from '../api'
 import { Empty, ErrorBox, Loading, Pager, fmtDate, useDebounced, useFetch } from '../components/ui'
 
 const LIMIT = 50
-const TABLES = [['incidents', 'Incidents'], ['problems', 'Problems'], ['changes', 'Changes'], ['releases', 'Releases'], ['approvals', 'Approvals'], ['profiles', 'Users'], ['sla_policies', 'SLA targets']]
+const TABLES = [['incidents', 'Incidents'], ['problems', 'Problems'], ['defects', 'Defects'], ['changes', 'Changes'], ['releases', 'Releases'], ['approvals', 'Approvals'], ['profiles', 'Users'], ['sla_policies', 'SLA targets']]
 
 export default function Audit() {
   const [table, setTable] = useState('')

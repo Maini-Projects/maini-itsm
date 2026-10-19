@@ -34,7 +34,7 @@ export function fmtTarget(m) {
 
 // ---- badges --------------------------------------------------------------------------------
 const STATUS_TONE = {
-  New: 'blue', Assigned: 'amber', 'In Progress': 'blue', Pending: 'gray', Resolved: 'green', 'Pending Approval': 'amber',
+  New: 'blue', Assigned: 'amber', 'In Progress': 'blue', Pending: 'gray', Resolved: 'green',
   Closed: 'gray', Identified: 'blue', Investigating: 'amber', 'Root Cause Identified': 'green', 'Fix Planned': 'blue',
   Draft: 'gray', Submitted: 'blue', 'Under Review': 'amber', 'Approval Pending': 'amber', Scheduled: 'blue',
   Implementation: 'amber', Implemented: 'green', Planned: 'gray', Approved: 'green', 'Ready to Deploy': 'green',
@@ -43,14 +43,27 @@ const STATUS_TONE = {
 }
 export const Badge = ({ tone, children }) => <span className={`badge ${tone || 'gray'}`}>{children}</span>
 export const StatusBadge = ({ status }) => <Badge tone={STATUS_TONE[status]}>{status}</Badge>
+export const SeverityBadge = ({ severity }) => <Badge tone={{ Critical: 'red', High: 'amber', Medium: 'blue', Low: 'gray' }[severity]}>{severity}</Badge>
 export const RiskBadge = ({ risk }) => <Badge tone={{ High: 'red', Medium: 'amber', Low: 'green' }[risk]}>{risk}</Badge>
-export const Priority = ({ p }) => <span className={p === 'P1' ? 'p1' : p === 'P2' ? 'p2' : ''}>{p}</span>
+// Priority is stored as P1-P4 and shown as Critical / High / Medium / Low (listed here from lowest to highest).
+export const PRIORITIES = [['P4', 'Low'], ['P3', 'Medium'], ['P2', 'High'], ['P1', 'Critical']]
+export const priorityLabel = (p) => (PRIORITIES.find(([v]) => v === p) || [])[1] || p
+export const Priority = ({ p }) => <span className={p === 'P1' ? 'p1' : p === 'P2' ? 'p2' : ''}>{priorityLabel(p)}</span>
 
-export function SlaCell({ inc }) {
-  if (inc.minutes_to_resolution_due === null || inc.minutes_to_resolution_due === undefined) return <span>—</span>
-  const m = inc.minutes_to_resolution_due
-  const tone = inc.sla_breached ? 'red' : m < 60 ? 'amber' : 'gray'
-  return <Badge tone={tone}>{inc.sla_breached ? `Breached · ${fmtMinutes(m)}` : fmtMinutes(m)}</Badge>
+// How long a ticket has been open: "1d 1h", "3h 20m", "12m". Finished tickets show how long they took.
+export function fmtAge(ms) {
+  const mins = Math.max(0, Math.floor(ms / 60000))
+  const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60
+  if (d > 0) return `${d}d ${h}h`
+  if (h > 0) return `${h}h ${m}m`
+  return mins < 1 ? 'under 1m' : `${m}m`
+}
+
+export function OpenFor({ inc }) {
+  const done = inc.status === 'Closed' || inc.status === 'Resolved'
+  const end = done ? new Date(inc.resolved_at || inc.closed_at || Date.now()) : new Date()
+  const age = fmtAge(end - new Date(inc.created_at))
+  return <span title={`Raised ${fmtDate(inc.created_at)}`}>{done ? `Resolved in ${age}` : `Open for ${age}`}</span>
 }
 
 // ---- data loading --------------------------------------------------------------------------
@@ -202,15 +215,41 @@ export function Timeline({ events }) {
 }
 
 // ---- pickers -------------------------------------------------------------------------------
-// Pick a person (for assigning) from a list loaded by the caller.
+// Pick a person (for assigning) from a list loaded by the caller. Type to search by name, email, team or role.
+const personLabel = (p) => `${p.full_name}${p.team_name ? ` · ${p.team_name}` : ''} (${p.role})`
 export function PersonSelect({ people, value, onChange, placeholder = 'Choose a person' }) {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const box = useRef(null)
+  const chosen = people.find((p) => p.id === value)
+  useEffect(() => {
+    const close = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [])
+  const term = q.trim().toLowerCase()
+  const shown = people.filter((p) => !term || `${p.full_name} ${p.email || ''} ${p.team_name || ''} ${p.role}`.toLowerCase().includes(term))
+  const pick = (p) => { onChange(p.id); setQ(''); setOpen(false) }
+  const onKey = (e) => {
+    if (e.key === 'Escape') setOpen(false)
+    if (e.key === 'Enter') { e.preventDefault(); if (shown.length) pick(shown[0]) }
+  }
   return (
-    <select value={value || ''} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{placeholder}</option>
-      {people.map((p) => (
-        <option key={p.id} value={p.id}>{p.full_name}{p.team_name ? ` · ${p.team_name}` : ''} ({p.role})</option>
-      ))}
-    </select>
+    <div className="picker" ref={box}>
+      <input
+        value={open ? q : chosen ? personLabel(chosen) : ''} placeholder={`${placeholder} (type to search)`}
+        onFocus={() => { setQ(''); setOpen(true) }} onClick={() => setOpen(true)}
+        onChange={(e) => { setQ(e.target.value); setOpen(true) }} onKeyDown={onKey}
+        aria-label={placeholder} autoComplete="off"
+      />
+      {open && (
+        <div className="results">
+          {shown.length ? shown.map((p) => (
+            <button key={p.id} type="button" onClick={() => pick(p)}><b>{p.full_name}</b> · {p.email}<br /><small>{p.team_name || 'No team'} · {p.role}</small></button>
+          )) : <div style={{ padding: '9px 10px', fontSize: 12, color: 'var(--muted)' }}>{people.length ? 'No one matches that search.' : 'No people available to assign.'}</div>}
+        </div>
+      )}
+    </div>
   )
 }
 

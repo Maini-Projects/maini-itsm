@@ -6,7 +6,7 @@ from ..rbac import Principal, current_user, visibility
 
 router = APIRouter(tags=["dashboard"])
 
-OPEN = "i.status not in ('Resolved','Pending Approval','Closed')"
+OPEN = "i.status not in ('Resolved','Closed')"
 # "At risk": still open and either already late, or inside the last 25% of its resolution window (min 30 min)
 AT_RISK = "i.resolution_due < now() + greatest((i.resolution_due - i.created_at) * 0.25, interval '30 minutes')"
 
@@ -25,8 +25,7 @@ def summary(user: Principal = Depends(current_user), conn=Depends(get_conn)):
                    count(*) filter (where {OPEN} and {AT_RISK}) as sla_at_risk,
                    count(*) filter (where {OPEN} and i.resolution_due < now()) as sla_breached,
                    count(*) filter (where {OPEN} and i.resolution_due between now() and now() + interval '30 minutes')
-                       as due_within_30_min,
-                   count(*) filter (where i.status = 'Pending Approval') as awaiting_approval
+                       as due_within_30_min
               from incidents i where {vis}""",
         vp,
     )
@@ -49,7 +48,17 @@ def summary(user: Principal = Depends(current_user), conn=Depends(get_conn)):
             "percent": round(100 * r["within_sla"] / resolved) if resolved else None,
         })
 
-    result = {"incidents": incidents, "sla_performance": sla_performance, "team_workload": [],
+    dvis, dp = visibility(user, alias="d", owner_col="raised_by", assignee_col="assignee_id")
+    defects = fetch_one(
+        conn,
+        f"""select count(*) filter (where d.status not in ('Resolved','Closed')) as open,
+                   count(*) filter (where d.status not in ('Resolved','Closed') and d.severity = 'Critical')
+                       as critical_open
+              from defects d where {dvis}""",
+        dp,
+    )
+
+    result = {"incidents": incidents, "defects": defects, "sla_performance": sla_performance, "team_workload": [],
               "pending_approvals": None, "problems": None, "changes": None, "releases": None}
     if not staff:
         return result
@@ -74,8 +83,8 @@ def summary(user: Principal = Depends(current_user), conn=Depends(get_conn)):
     by_type = {r["record_type"]: r["n"] for r in fetch_all(
         conn, f"select a.record_type::text, count(*) as n from approvals a "
               f"where a.status = 'pending' and {appr_where} group by a.record_type", appr_params)}
-    result["pending_approvals"] = {"total": sum(by_type.values()), "incident": by_type.get("incident", 0),
-                                   "change": by_type.get("change", 0), "release": by_type.get("release", 0)}
+    result["pending_approvals"] = {"total": sum(by_type.values()), "change": by_type.get("change", 0),
+                                   "release": by_type.get("release", 0)}
 
     result["problems"] = {r["status"]: r["n"] for r in fetch_all(
         conn, f"select x.status, count(*) as n from problems x "

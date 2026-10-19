@@ -1,4 +1,4 @@
-"""API tests: every role, team scoping, the incident workflow, approvals, users, reference data, dashboard."""
+"""API tests: every role, team scoping, the incident workflow, approvals (changes/releases), users, reference data, dashboard."""
 from conftest import IDS, as_user
 
 API = "/api/v1"
@@ -53,7 +53,7 @@ def test_me_describes_each_role(client):
     assert mgr["role"] == "manager" and mgr["team_name"] == "Development"
     assert "approvals" in mgr["menu"] and "admin" not in mgr["menu"]
     emp = client.get(f"{API}/me", headers=as_user("supemp")).json()
-    assert emp["team_name"] == "Support" and emp["menu"] == ["dashboard", "incidents", "problems"]
+    assert emp["team_name"] == "Support" and emp["menu"] == ["dashboard", "incidents", "problems", "defects", "changes", "releases"]
     assert emp["organization_name"] == "CVS Health Care Systems"
 
 
@@ -152,7 +152,41 @@ def test_assignment_rules(client):
     assert assign(client, "devmgr", inc["id"], "admin").status_code == 200           # managers may hand to an admin
 
 
-# ---- the P3/P4 flow ------------------------------------------------------------------------
+# ---- choosing a priority directly (Critical / High / Medium / Low) -------------------------
+
+def test_incident_priority_is_chosen_directly(client):
+    expected = {"P1": ("High", "High"), "P2": ("High", "Medium"), "P3": ("Medium", "Medium"), "P4": ("Low", "Low")}
+    for code, (impact, urgency) in expected.items():
+        r = client.post(f"{API}/incidents", json={"short_description": f"Priority {code}", "priority": code},
+                        headers=as_user("devemp"))
+        assert r.status_code == 201, r.text
+        assert r.json()["priority"] == code and (r.json()["impact"], r.json()["urgency"]) == (impact, urgency)
+    default = client.post(f"{API}/incidents", json={"short_description": "No priority given"}, headers=as_user("devemp"))
+    assert default.json()["priority"] == "P3"                                           # Medium by default
+    legacy = client.post(f"{API}/incidents", json={"short_description": "Old style", "impact": "High", "urgency": "High"},
+                         headers=as_user("devemp"))
+    assert legacy.json()["priority"] == "P1"                                            # impact/urgency still accepted
+    bad = client.post(f"{API}/incidents", json={"short_description": "Bad priority", "priority": "Urgent"},
+                      headers=as_user("devemp"))
+    assert bad.status_code == 422 and bad.json()["error"]["code"] == "validation_error"
+
+
+def test_changing_the_priority_updates_the_sla_clocks_and_is_staff_only(client):
+    inc = raise_incident(client, priority="P4")
+    assert inc["priority"] == "P4"
+    h = as_user("devmgr")
+    r = client.patch(f"{API}/incidents/{inc['id']}", json={"priority": "P1"}, headers=h)
+    assert r.status_code == 200 and r.json()["priority"] == "P1"
+    assert r.json()["resolution_due"] != inc["resolution_due"]                          # clocks recomputed
+    assert client.patch(f"{API}/incidents/{inc['id']}", json={"priority": "P2"}, headers=as_user("devemp")).status_code == 403
+    assert client.patch(f"{API}/incidents/{inc['id']}", json={"priority": None}, headers=h).status_code == 200
+    assert client.get(f"{API}/incidents/{inc['id']}", headers=h).json()["priority"] == "P1"   # null changes nothing
+    assert client.patch(f"{API}/incidents/{inc['id']}", json={"priority": "P9"}, headers=h).status_code == 422
+    low = client.get(f"{API}/incidents", params={"priority": "P1"}, headers=h).json()
+    assert low["total"] == 1
+
+
+# ---- closing incidents: no approval at any priority -----------------------------------------
 
 def test_p3_flow_requester_confirms_and_no_approval_is_created(client):
     inc = raise_incident(client, impact="Medium", urgency="Medium")
@@ -184,8 +218,8 @@ def test_workflow_rules_are_enforced_with_clear_errors(client):
     r = move(client, "devmgr", inc["id"], "Resolved")
     assert r.status_code == 422 and r.json()["error"]["code"] == "resolution_notes_required"
     move(client, "devmgr", inc["id"], "Resolved", resolution_notes="Done")
-    r = move(client, "devmgr", inc["id"], "Pending Approval")
-    assert r.status_code == 409 and r.json()["error"]["code"] == "approval_not_needed"
+    r = move(client, "devmgr", inc["id"], "Pending Approval")                       # no such status any more
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
     assert move(client, "supmgr", inc["id"], "Closed").status_code == 404
 
 
@@ -198,58 +232,42 @@ def test_closed_incident_cannot_be_edited_or_reassigned(client):
     assert assign(client, "admin", inc["id"], "admin").status_code == 409
 
 
-# ---- the P1/P2 flow with approvals ---------------------------------------------------------
+# ---- P1/P2 incidents close directly too ----------------------------------------------------
 
-def test_p1_needs_approval_and_a_manager_cannot_approve_their_own_work(client):
+def test_p1_closes_directly_by_the_manager_with_no_approval(client):
     inc = raise_incident(client)
+    assert inc["priority"] == "P1"
     work_to_resolved(client, "devmgr", inc["id"])
     r = move(client, "devmgr", inc["id"], "Closed")
-    assert r.status_code == 409 and r.json()["error"]["code"] == "approval_required"
-    assert move(client, "devemp", inc["id"], "Closed").status_code == 403             # requester cannot close a P1
-    r = move(client, "devmgr", inc["id"], "Pending Approval")
-    assert r.status_code == 200 and r.json()["status"] == "Pending Approval"
-    assert move(client, "devmgr", inc["id"], "In Progress").json()["error"]["code"] == "awaiting_approval"
-
-    queue = client.get(f"{API}/approvals", headers=as_user("devmgr")).json()
-    assert len(queue) == 1 and queue[0]["can_decide"] is False                        # their own work: view only
-    approval_id = queue[0]["id"]
-    assert client.get(f"{API}/approvals", headers=as_user("supmgr")).json() == []     # other team sees nothing
-    assert client.get(f"{API}/approvals", headers=as_user("devemp")).status_code == 403
-
-    decide = lambda who, **b: client.post(f"{API}/approvals/{approval_id}/decision", json=b, headers=as_user(who))
-    assert decide("devmgr", decision="approved").json()["error"]["code"] == "self_approval"
-    assert decide("supmgr", decision="approved").status_code == 404
-    assert decide("devemp", decision="approved").status_code == 403
-    assert decide("admin", decision="rejected").json()["error"]["code"] == "comment_required"
-    r = decide("admin", decision="approved", comment="Verified with Finance")
-    assert r.status_code == 200 and r.json()["status"] == "approved" and r.json()["decided_by_name"] == "Admin"
-    assert client.get(f"{API}/incidents/{inc['id']}", headers=as_user("devemp")).json()["status"] == "Closed"
-    assert decide("admin", decision="approved").json()["error"]["code"] == "already_decided"
+    assert r.status_code == 200 and r.json()["status"] == "Closed" and r.json()["closed_at"]
+    assert client.get(f"{API}/approvals?status=all", headers=as_user("admin")).json() == []
+    assert client.get(f"{API}/approvals?status=all", headers=as_user("devmgr")).json() == []
 
 
-def test_team_manager_approves_when_an_admin_did_the_work(client):
+def test_p2_requester_confirms_and_admin_can_close(client):
     inc = raise_incident(client, impact="High", urgency="Medium")                      # P2
     assert inc["priority"] == "P2"
-    work_to_resolved(client, "admin", inc["id"])
-    move(client, "admin", inc["id"], "Pending Approval")
-    queue = client.get(f"{API}/approvals", headers=as_user("devmgr")).json()
-    assert len(queue) == 1 and queue[0]["can_decide"] is True and queue[0]["priority"] == "P2"
-    r = client.post(f"{API}/approvals/{queue[0]['id']}/decision", json={"decision": "approved"},
-                    headers=as_user("devmgr"))
-    assert r.status_code == 200
-    assert client.get(f"{API}/incidents/{inc['id']}", headers=as_user("admin")).json()["status"] == "Closed"
+    work_to_resolved(client, "devmgr", inc["id"])
+    assert move(client, "devemp2", inc["id"], "Closed").status_code == 404            # not their incident
+    r = move(client, "devemp", inc["id"], "Closed")
+    assert r.status_code == 200 and r.json()["status"] == "Closed"
+    other = raise_incident(client, impact="High", urgency="Medium")
+    work_to_resolved(client, "admin", other["id"])
+    assert move(client, "admin", other["id"], "Closed").status_code == 200
 
 
-def test_rejection_sends_the_incident_back_to_in_progress(client):
+def test_resolved_p1_can_be_reopened(client):
     inc = raise_incident(client)
     work_to_resolved(client, "devmgr", inc["id"])
-    move(client, "devmgr", inc["id"], "Pending Approval")
-    approval = client.get(f"{API}/approvals", headers=as_user("admin")).json()[0]
-    r = client.post(f"{API}/approvals/{approval['id']}/decision", headers=as_user("admin"),
-                    json={"decision": "rejected", "comment": "Not verified"})
-    assert r.status_code == 200 and r.json()["comment"] == "Not verified"
-    after = client.get(f"{API}/incidents/{inc['id']}", headers=as_user("admin")).json()
-    assert after["status"] == "In Progress" and after["resolved_at"] is None
+    r = move(client, "devemp", inc["id"], "In Progress")
+    assert r.status_code == 200 and r.json()["status"] == "In Progress" and r.json()["resolved_at"] is None
+
+
+def test_pending_approval_is_not_an_incident_status_any_more(client):
+    inc = raise_incident(client)
+    work_to_resolved(client, "devmgr", inc["id"])
+    r = move(client, "admin", inc["id"], "Pending Approval")
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
 
 
 # ---- comments and activity -----------------------------------------------------------------
@@ -382,10 +400,10 @@ def test_dashboard_counts_and_scoping(client):
     assert emp1["incidents"]["open"] == 3 and emp1["pending_approvals"] is None
 
     work_to_resolved(client, "devmgr", p1["id"])
-    move(client, "devmgr", p1["id"], "Pending Approval")
+    assert move(client, "devmgr", p1["id"], "Closed").status_code == 200
     after = client.get(f"{API}/dashboard/summary", headers=as_user("admin")).json()
-    assert after["incidents"]["open"] == 3 and after["incidents"]["awaiting_approval"] == 1
-    assert after["pending_approvals"] == {"total": 1, "incident": 1, "change": 0, "release": 0}
+    assert after["incidents"]["open"] == 3 and "awaiting_approval" not in after["incidents"]
+    assert after["pending_approvals"] == {"total": 0, "change": 0, "release": 0}
     perf = {p["priority"]: p for p in after["sla_performance"]}
     assert perf["P1"]["resolved_this_month"] == 1 and perf["P1"]["percent"] == 100 and perf["P2"]["percent"] is None
     assert client.get(f"{API}/dashboard/summary", headers=as_user("devmgr")).json()["pending_approvals"]["total"] == 0

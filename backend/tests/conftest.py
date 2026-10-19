@@ -147,8 +147,8 @@ def clean(raw, app):
     """Every test starts from: the six seeded people, default services and SLA targets, no tickets."""
     yield
     keep = list(IDS.values())
-    raw.execute("truncate incident_comments, approvals, problem_incidents, release_changes, incidents, problems, "
-                "changes, releases, audit_log restart identity")
+    raw.execute("truncate incident_comments, defect_comments, approvals, problem_incidents, release_changes, incidents, "
+                "problems, defects, changes, releases, audit_log restart identity")
     raw.execute("delete from profiles where id <> all(%s)", (keep,))
     raw.execute("delete from auth.users where id <> all(%s)", (keep,))
     raw.execute("update profiles set status = 'active' where id = any(%s)", (keep,))

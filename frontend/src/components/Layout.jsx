@@ -5,7 +5,7 @@ import { useAuth } from '../auth'
 import { Field, FormModal, useToast } from './ui'
 
 const SECTIONS = [
-  { title: 'Service Management', items: [['incidents', 'Incidents'], ['problems', 'Problems'], ['changes', 'Changes'], ['releases', 'Releases']] },
+  { title: 'Service Management', items: [['incidents', 'Incidents'], ['problems', 'Problems'], ['defects', 'Defects'], ['changes', 'Changes'], ['releases', 'Releases']] },
   { title: 'Service Portfolio', items: [['services', 'Projects & Services']] },
   { title: 'Governance & Operations', items: [['approvals', 'Approvals'], ['sla', 'SLA Management'], ['reports', 'Reports'], ['audit', 'Audit History']] },
   { title: 'Administration', items: [['admin', 'Admin']] },
@@ -15,6 +15,7 @@ function sidebarCount(key, c) {
   if (!c) return null
   if (key === 'incidents') return c.incidents?.open
   if (key === 'problems') return c.problems ? Object.values(c.problems).reduce((a, b) => a + b, 0) : null
+  if (key === 'defects') return c.defects?.open
   if (key === 'changes') return c.changes?.active
   if (key === 'releases') return c.releases?.upcoming_14_days
   if (key === 'approvals') return c.pending_approvals?.total
@@ -80,9 +81,6 @@ export default function Layout() {
           ⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search incidents by number or description" aria-label="Search incidents" />
         </form>
         <div className="actions">
-          <Link className="topbtn" to="/" title="Home" aria-label="Home">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.3 12 3.4l8.5 6.9v9.1a1 1 0 0 1-1 1h-5.2v-6.2H9.7v6.2H4.5a1 1 0 0 1-1-1v-9.1Z" /><path d="M9.7 20.4v-6.2h4.6v6.2" /></svg>
-          </Link>
           <div className="time">{clock}</div>
           <button className="avatar" onClick={() => setMenu((m) => !m)} aria-label="Account menu"><span>{initials}</span></button>
         </div>

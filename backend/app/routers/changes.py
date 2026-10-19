@@ -1,8 +1,9 @@
 """Change requests. Managers raise them, an admin approves them (see approvals.py).
 
-  manager  - raises changes; edits and moves their team's changes (edit only while Draft)
+  everyone - can read every change (list, detail, activity) so the whole organisation sees what is planned
+  manager  - raises changes; edits and moves their own team's changes (edit only while Draft)
   admin    - no restrictions (may edit until Closed)
-  employee - no access
+  employee - read-only
 The database enforces the workflow; the approval step (Approval Pending -> Scheduled / Draft) is
 done only through /approvals/{id}/decision.
 """
@@ -16,7 +17,7 @@ from pydantic import BaseModel, Field
 from ..activity import timeline
 from ..db import fetch_all, fetch_one, get_conn
 from ..errors import api_error
-from ..rbac import Principal, can_manage, require_roles, visibility
+from ..rbac import Principal, can_manage, current_user, require_roles
 
 router = APIRouter(tags=["changes"])
 staff_only = require_roles("admin", "manager")
@@ -38,7 +39,8 @@ join profiles rq on rq.id = c.requester_id
 
 
 def _vis(user: Principal) -> tuple[str, dict]:
-    return visibility(user, alias="c", owner_col="requester_id", assignee_col=None)
+    """Reading is open to the whole organisation; changing is limited by can_manage and staff_only."""
+    return "true", {}
 
 
 def load(conn, user: Principal, change_id: UUID) -> dict:
@@ -74,7 +76,7 @@ def list_changes(
     q: str | None = Query(default=None, description="matches the number or the title"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    user: Principal = Depends(staff_only),
+    user: Principal = Depends(current_user),
     conn=Depends(get_conn),
 ):
     vis, vp = _vis(user)
@@ -92,12 +94,12 @@ def list_changes(
 
 
 @router.get("/changes/{change_id}")
-def get_change(change_id: UUID, user: Principal = Depends(staff_only), conn=Depends(get_conn)):
+def get_change(change_id: UUID, user: Principal = Depends(current_user), conn=Depends(get_conn)):
     return _detail(conn, user, change_id)
 
 
 @router.get("/changes/{change_id}/activity")
-def change_activity(change_id: UUID, user: Principal = Depends(staff_only), conn=Depends(get_conn)):
+def change_activity(change_id: UUID, user: Principal = Depends(current_user), conn=Depends(get_conn)):
     load(conn, user, change_id)
     return timeline(conn, "changes", change_id)
 

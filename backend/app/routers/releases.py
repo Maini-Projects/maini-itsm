@@ -1,8 +1,9 @@
 """Releases: group changes, get admin approval, deploy and validate.
 
-  manager  - raises releases; edits and moves their team's releases (edit only while Planned)
+  everyone - can read every release (list, detail, activity)
+  manager  - raises releases; edits and moves their own team's releases (edit only while Planned)
   admin    - no restrictions (may edit until Closed)
-  employee - no access
+  employee - read-only
 The approval step (Under Review -> Approved / Planned) is done only through /approvals/{id}/decision.
 """
 from datetime import datetime
@@ -15,7 +16,7 @@ from pydantic import BaseModel, Field
 from ..activity import timeline
 from ..db import fetch_all, fetch_one, get_conn
 from ..errors import api_error
-from ..rbac import Principal, can_manage, require_roles, visibility
+from ..rbac import Principal, can_manage, current_user, require_roles
 from . import changes as change_module
 
 router = APIRouter(tags=["releases"])
@@ -36,7 +37,8 @@ join profiles ow on ow.id = r.owner_id
 
 
 def _vis(user: Principal) -> tuple[str, dict]:
-    return visibility(user, alias="r", owner_col="owner_id", assignee_col=None)
+    """Reading is open to the whole organisation; changing is limited by can_manage and staff_only."""
+    return "true", {}
 
 
 def load(conn, user: Principal, release_id: UUID) -> dict:
@@ -72,7 +74,7 @@ def list_releases(
     q: str | None = Query(default=None, description="matches the number or the name"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    user: Principal = Depends(staff_only),
+    user: Principal = Depends(current_user),
     conn=Depends(get_conn),
 ):
     vis, vp = _vis(user)
@@ -89,12 +91,12 @@ def list_releases(
 
 
 @router.get("/releases/{release_id}")
-def get_release(release_id: UUID, user: Principal = Depends(staff_only), conn=Depends(get_conn)):
+def get_release(release_id: UUID, user: Principal = Depends(current_user), conn=Depends(get_conn)):
     return _detail(conn, user, release_id)
 
 
 @router.get("/releases/{release_id}/activity")
-def release_activity(release_id: UUID, user: Principal = Depends(staff_only), conn=Depends(get_conn)):
+def release_activity(release_id: UUID, user: Principal = Depends(current_user), conn=Depends(get_conn)):
     load(conn, user, release_id)
     return timeline(conn, "releases", release_id)
 
@@ -189,7 +191,9 @@ class ChangeLinkIn(BaseModel):
 def add_change(release_id: UUID, body: ChangeLinkIn, user: Principal = Depends(staff_only), conn=Depends(get_conn)):
     rel = load(conn, user, release_id)
     _check_editable(rel, user)
-    change_module.load(conn, user, body.change_id)  # 404 unless the user may see that change
+    chg = change_module.load(conn, user, body.change_id)
+    if not can_manage(user, chg):  # everyone can read changes, but a release only takes changes you manage
+        raise api_error(403, "forbidden", "You can only add changes from your own team.")
     conn.execute("insert into release_changes(release_id, change_id) values (%(r)s, %(c)s) on conflict do nothing",
                  {"r": release_id, "c": body.change_id})
     conn.execute("update releases set updated_by = %(uid)s where id = %(r)s", {"uid": user.id, "r": release_id})

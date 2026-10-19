@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import ApprovalBox from '../components/ApprovalBox'
@@ -12,12 +12,15 @@ const STATUSES = ['Planned', 'Under Review', 'Approved', 'Ready to Deploy', 'Dep
 const LIMIT = 25
 
 export function ReleaseList() {
+  const { me } = useAuth()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [environment, setEnvironment] = useState('')
   const [status, setStatus] = useState('')
   const [offset, setOffset] = useState(0)
-  const [creating, setCreating] = useState(false)
+  const [sp, setSp] = useSearchParams()
+  const [creating, setCreating] = useState(sp.get('new') === '1' && me.role !== 'employee')
+  useEffect(() => { if (sp.get('new')) { sp.delete('new'); setSp(sp, { replace: true }) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const dq = useDebounced(q)
   useEffect(() => setOffset(0), [dq, environment, status])
   const { data, error, loading } = useFetch(() => api.get('/releases', { q: dq.trim(), environment, status, limit: LIMIT, offset }), [dq, environment, status, offset])
@@ -25,14 +28,14 @@ export function ReleaseList() {
     <>
       <div className="eyebrow">Release Management</div>
       <h2 className="title">Releases</h2>
-      <p className="sub">Plan releases, group changes and track approval, deployment and validation. Managers raise releases; an admin approves them.</p>
+      <p className="sub">Plan releases, group changes and track approval, deployment and validation. Managers raise releases; an admin approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
         <div className="filters">
           <input placeholder="Search releases" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search releases" />
           <select value={environment} onChange={(e) => setEnvironment(e.target.value)} aria-label="Environment"><option value="">All environments</option><option>Production</option><option>UAT</option></select>
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
         </div>
-        <button className="btn" onClick={() => setCreating(true)}>+ New Release</button>
+        {me.role !== 'employee' ? <button className="btn" onClick={() => setCreating(true)}>+ New Release</button> : <span />}
       </div>
       <ErrorBox error={error} />
       <div className="card table">

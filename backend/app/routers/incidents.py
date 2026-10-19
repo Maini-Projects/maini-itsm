@@ -1,7 +1,8 @@
 """Incidents: raise, view, edit, assign, move through the workflow, comment, activity timeline.
 
-The database enforces the workflow itself (allowed moves, resolution notes, the P1/P2 approval
-gate, SLA clocks). This module decides who may attempt what:
+The database enforces the workflow itself (allowed moves, resolution notes, SLA clocks). Incidents of
+every priority close directly from Resolved; there is no approval step. This module decides who may
+attempt what:
   employee - raises incidents, edits their own while still New, comments, and confirms (closes) or
              reopens their own resolved incident
   manager  - works their team's incidents: assign, edit everything, move through the workflow
@@ -21,7 +22,10 @@ router = APIRouter(tags=["incidents"])
 
 Level = Literal["High", "Medium", "Low"]
 Priority = Literal["P1", "P2", "P3", "P4"]
-NOT_OPEN = "('Resolved','Pending Approval','Closed')"  # work finished (or awaiting sign-off)
+# The screens pick a priority directly (shown as Critical / High / Medium / Low). The database still works the
+# priority out from impact and urgency, so a chosen priority is stored as the pair that gives exactly that priority.
+PRIORITY_LEVELS = {"P1": ("High", "High"), "P2": ("High", "Medium"), "P3": ("Medium", "Medium"), "P4": ("Low", "Low")}
+NOT_OPEN = "('Resolved','Closed')"  # work finished
 
 SELECT = f"""
 select i.id, i.number, i.short_description, i.description, i.status, i.priority, i.impact, i.urgency,
@@ -101,8 +105,9 @@ class IncidentIn(BaseModel):
     short_description: str = Field(min_length=3, max_length=200)
     description: str | None = Field(default=None, max_length=10000)
     service_id: UUID | None = None
-    impact: Level = "Medium"
-    urgency: Level = "Medium"
+    priority: Priority | None = Field(default=None, description="P1 Critical, P2 High, P3 Medium (default), P4 Low")
+    impact: Level | None = Field(default=None, description="optional; only used when priority is not given")
+    urgency: Level | None = Field(default=None, description="optional; only used when priority is not given")
     requester_id: UUID | None = Field(default=None, description="admin only: raise on someone else's behalf")
 
 
@@ -110,26 +115,28 @@ class IncidentPatch(BaseModel):
     short_description: str | None = Field(default=None, min_length=3, max_length=200)
     description: str | None = Field(default=None, max_length=10000)
     service_id: UUID | None = None
+    priority: Priority | None = None
     impact: Level | None = None
     urgency: Level | None = None
     major_incident: bool | None = None
 
 
-STAFF_ONLY_FIELDS = {"impact", "urgency", "major_incident"}
+STAFF_ONLY_FIELDS = {"priority", "impact", "urgency", "major_incident"}
 
 
 @router.post("/incidents", status_code=201)
 def create_incident(body: IncidentIn, user: Principal = Depends(current_user), conn=Depends(get_conn)):
-    """Priority, team, number and SLA deadlines are set by the database from the fields below."""
+    """Team, number and SLA deadlines are set by the database. Send `priority` (default P3 Medium)."""
     requester = body.requester_id or user.id
     if requester != user.id and user.role != "admin":
         raise api_error(403, "forbidden", "Only an administrator can raise an incident for someone else.")
+    impact, urgency = PRIORITY_LEVELS[body.priority] if body.priority else (body.impact or "Medium", body.urgency or "Medium")
     row = fetch_one(
         conn,
         """insert into incidents(short_description, description, service_id, impact, urgency, requester_id, updated_by)
            values (%(sd)s, %(d)s, %(svc)s, %(imp)s, %(urg)s, %(req)s, %(uid)s) returning id""",
-        {"sd": body.short_description, "d": body.description, "svc": body.service_id, "imp": body.impact,
-         "urg": body.urgency, "req": requester, "uid": user.id},
+        {"sd": body.short_description, "d": body.description, "svc": body.service_id, "imp": impact,
+         "urg": urgency, "req": requester, "uid": user.id},
     )
     return load(conn, user, row["id"])
 
@@ -148,6 +155,12 @@ def update_incident(incident_id: UUID, body: IncidentPatch, user: Principal = De
     if not (can_manage(user, inc) or own_while_new):
         raise api_error(403, "forbidden", "You can only edit your own incident while it is New, "
                                           "and only its description and service.")
+    if "priority" in changes:  # a chosen priority is stored as the impact/urgency pair that gives it
+        chosen = changes.pop("priority")
+        if chosen:
+            changes["impact"], changes["urgency"] = PRIORITY_LEVELS[chosen]
+        if not changes:
+            return load(conn, user, incident_id)
     sets = ", ".join(f"{col} = %({col})s" for col in changes)  # column names come from the model, not the caller
     conn.execute(f"update incidents set {sets}, updated_by = %(uid)s where id = %(id)s",
                  {**changes, "uid": user.id, "id": incident_id})
@@ -186,7 +199,7 @@ def assign_incident(incident_id: UUID, body: AssignIn, user: Principal = Depends
 
 
 class TransitionIn(BaseModel):
-    to_status: Literal["Assigned", "In Progress", "Pending", "Resolved", "Pending Approval", "Closed"]
+    to_status: Literal["Assigned", "In Progress", "Pending", "Resolved", "Closed"]
     resolution_notes: str | None = Field(default=None, max_length=10000)
 
 
@@ -195,16 +208,13 @@ def transition_incident(incident_id: UUID, body: TransitionIn, user: Principal =
                         conn=Depends(get_conn)):
     """Move the incident to its next state. Invalid moves are refused by the database with a clear message.
 
-    P1/P2: Resolved -> Pending Approval, then a decision on /approvals/{id}/decision closes or reopens it.
-    P3/P4: Resolved -> Closed directly.
+    Every priority: Resolved -> Closed directly (no approval). Resolved -> In Progress reopens it.
     """
     inc = load(conn, user, incident_id)
-    if inc["status"] == "Pending Approval":
-        raise api_error(409, "awaiting_approval", "This incident is waiting for an approval decision.")
     staff = can_manage(user, inc)
     if not staff:
         own = inc["requester_id"] == user.id
-        confirm = body.to_status == "Closed" and inc["priority"] in ("P3", "P4")
+        confirm = body.to_status == "Closed"
         reopen = body.to_status == "In Progress"
         if not (own and inc["status"] == "Resolved" and (confirm or reopen)):
             raise api_error(403, "forbidden", "You can only confirm (close) or reopen your own resolved incident.")

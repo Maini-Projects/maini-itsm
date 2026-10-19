@@ -1,4 +1,4 @@
-"""Approval queue: P1/P2 incident sign-off (team manager or admin), changes and releases (admin).
+"""Approval queue: changes and releases (admin decides). Incidents and problems need no approval.
 
 The database decides who may approve what and moves the record on in the same transaction;
 this module lists the queue and records the decision.
@@ -34,7 +34,7 @@ left join releases  r on a.record_type = 'release'  and r.id = a.record_id
 
 
 def _scope(user: Principal) -> tuple[str, dict]:
-    """Admins see every approval; managers see their team's incident approvals and their own requests."""
+    """Admins see every approval; managers see their own requests (and any old team incident approvals kept as history)."""
     if user.role == "admin":
         return "true", {}
     return ("((a.approver_role = 'manager' and a.team_id = %(team)s) or a.requested_by = %(me)s)",

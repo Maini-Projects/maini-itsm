@@ -1,10 +1,46 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { Badge, ErrorBox, Loading, StatusBadge, fmtShort, useFetch } from '../components/ui'
+import { Badge, ErrorBox, Loading, StatusBadge, fmtShort, priorityLabel, useFetch } from '../components/ui'
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 const sum = (o) => (o ? Object.values(o).reduce((a, b) => a + b, 0) : 0)
+
+const REQUEST_TYPES = [
+  { to: '/incidents', label: 'Incident', hint: 'Something is broken or not working' },
+  { to: '/problems', label: 'Problem', hint: 'Find the root cause of repeated incidents' },
+  { to: '/defects', label: 'Defect', hint: 'A bug found in a service' },
+  { to: '/changes', label: 'Change', hint: 'Request a change to a service', staff: true },
+  { to: '/releases', label: 'Release', hint: 'Plan a release of changes', staff: true },
+]
+
+// "+ New Request": pick what you want to raise, then the form for it opens.
+function NewRequestMenu({ role }) {
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const box = useRef(null)
+  useEffect(() => {
+    const close = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [])
+  const types = REQUEST_TYPES.filter((t) => !t.staff || role !== 'employee')
+  return (
+    <div className="reqmenu" ref={box}>
+      <button className="danger" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>+ New Request ▾</button>
+      {open && (
+        <div className="menu" role="menu">
+          {types.map((t) => (
+            <button key={t.to} role="menuitem" onClick={() => { setOpen(false); navigate(`${t.to}?new=1`) }}>
+              <b>{t.label}</b><small>{t.hint}</small>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Kpi({ label, value, note, to, color }) {
   const nav = useNavigate()
@@ -22,7 +58,7 @@ function SlaCard({ rows, to }) {
       <div className="body">
         {rows.map((r) => (
           <div className="metric" key={r.priority}>
-            <span>{r.priority} Resolution</span>
+            <span>{priorityLabel(r.priority)} Resolution</span>
             <div className="prog"><i style={{ width: `${r.percent ?? 0}%` }} /></div>
             <b>{r.percent === null ? '—' : `${r.percent}%`}</b>
           </div>
@@ -54,23 +90,23 @@ export default function Dashboard() {
       <p className="sub">
         {staff ? (me.role === 'admin' ? 'Operational status across all teams.' : `Operational status for the ${me.team_name} team.`) : 'Your incidents and their progress.'}
       </p>
-      <div className="major-action-only"><Link className="danger" to="/incidents?new=1">Open Incident</Link></div>
+      <div className="major-action-only"><NewRequestMenu role={me.role} /></div>
 
       {staff ? (
         <div className="kpis">
           <Kpi label="Open Incidents" value={inc.open} note={me.role === 'admin' ? 'Across all teams' : 'In your team'} to="/incidents" />
-          <Kpi label="P1 / P2 Incidents" value={inc.p1_p2_open} color="var(--red)" note={`${inc.p1_open} critical · ${inc.p2_open} high`} to="/incidents" />
+          <Kpi label="Critical / High Incidents" value={inc.p1_p2_open} color="var(--red)" note={`${inc.p1_open} critical · ${inc.p2_open} high`} to="/incidents" />
           <Kpi label="SLA At Risk" value={inc.sla_at_risk} color="var(--amber)" note={`${inc.sla_breached} breached · ${inc.due_within_30_min} due within 30 min`} to="/incidents" />
-          <Kpi label="Pending Approvals" value={d.pending_approvals.total} note={`${plural(d.pending_approvals.change, 'change')} · ${plural(d.pending_approvals.release, 'release')} · ${plural(d.pending_approvals.incident, 'incident')}`} to="/approvals" />
+          <Kpi label="Pending Approvals" value={d.pending_approvals.total} note={`${plural(d.pending_approvals.change, 'change')} · ${plural(d.pending_approvals.release, 'release')}`} to="/approvals" />
           <Kpi label="Active Problems" value={activeProblems} note={`${d.problems['Root Cause Identified'] || 0} root causes identified`} to="/problems" />
           <Kpi label="Upcoming Releases" value={d.releases.upcoming_14_days} note="Next 14 days" to="/releases" />
         </div>
       ) : (
         <div className="kpis four">
           <Kpi label="My Open Incidents" value={inc.open} note="Raised by you" to="/incidents" />
-          <Kpi label="P1 / P2 Incidents" value={inc.p1_p2_open} color="var(--red)" note={`${inc.p1_open} critical · ${inc.p2_open} high`} to="/incidents" />
+          <Kpi label="Critical / High Incidents" value={inc.p1_p2_open} color="var(--red)" note={`${inc.p1_open} critical · ${inc.p2_open} high`} to="/incidents" />
           <Kpi label="SLA At Risk" value={inc.sla_at_risk} color="var(--amber)" note={`${inc.sla_breached} breached`} to="/incidents" />
-          <Kpi label="Awaiting Sign-off" value={inc.awaiting_approval} note="Resolved, pending approval" to="/incidents" />
+          <Kpi label="Resolved This Month" value={d.sla_performance.reduce((n, r) => n + r.resolved_this_month, 0)} note="Your incidents" to="/incidents" />
         </div>
       )}
 

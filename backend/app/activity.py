@@ -1,18 +1,19 @@
 """Activity timeline (created, status, owner, priority changes) built from the audit log."""
 from .db import fetch_all
 
-SINGULAR = {"problems": "Problem", "changes": "Change", "releases": "Release"}
+SINGULAR = {"problems": "Problem", "changes": "Change", "releases": "Release", "defects": "Defect"}
 
 
-def timeline(conn, table: str, record_id, owner_key: str | None = None) -> list[dict]:
+def timeline(conn, table: str, record_id, owner_key: str | None = None, owner_label: str = "Owner set to") -> list[dict]:
     """Newest-first events for one record. `owner_key` is the audit field holding the person responsible
-    (problems: owner_id), or None when the record has no assignable owner."""
+    (problems: owner_id, defects: assignee_id), or None when the record has no assignable owner."""
     rows = fetch_all(
         conn,
         """select a.at, a.action, p.full_name as actor_name,
                   a.old_values ->> 'status' as old_status, a.new_values ->> 'status' as new_status,
                   a.old_values ->> %(ok)s as old_owner,    a.new_values ->> %(ok)s as new_owner,
-                  a.old_values ->> 'priority' as old_priority, a.new_values ->> 'priority' as new_priority
+                  a.old_values ->> 'priority' as old_priority, a.new_values ->> 'priority' as new_priority,
+                  a.old_values ->> 'severity' as old_severity, a.new_values ->> 'severity' as new_severity
              from audit_log a left join profiles p on p.id = a.actor_id
             where a.table_name = %(t)s and a.record_id = %(id)s
             order by a.id desc""",
@@ -35,8 +36,11 @@ def timeline(conn, table: str, record_id, owner_key: str | None = None) -> list[
                            "text": f"Status changed from {r['old_status']} to {r['new_status']}"})
         if owner_key and r["old_owner"] != r["new_owner"]:
             events.append({"at": r["at"], "type": "assignment", "actor": who,
-                           "text": f"Owner set to {names.get(r['new_owner'], 'nobody')}"})
+                           "text": f"{owner_label} {names.get(r['new_owner'], 'nobody')}"})
         if r["old_priority"] != r["new_priority"]:
             events.append({"at": r["at"], "type": "priority", "actor": who,
                            "text": f"Priority changed from {r['old_priority']} to {r['new_priority']}"})
+        if r["old_severity"] != r["new_severity"]:
+            events.append({"at": r["at"], "type": "severity", "actor": who,
+                           "text": f"Severity changed from {r['old_severity']} to {r['new_severity']}"})
     return events

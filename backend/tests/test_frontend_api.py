@@ -230,12 +230,19 @@ def decide(client, who, approval_id, decision="approved", comment=None):
                        headers=as_user(who))
 
 
-def test_changes_are_staff_only(client):
-    assert client.get(f"{API}/changes", headers=as_user("devemp")).status_code == 403
-    assert client.post(f"{API}/changes", json=FULL_CHANGE, headers=as_user("devemp")).status_code == 403
+def test_everyone_can_read_changes_but_only_staff_can_write(client):
     assert client.get(f"{API}/changes").status_code == 401
     c = new_change(client)
-    assert client.get(f"{API}/changes/{c['id']}", headers=as_user("devemp")).status_code == 403
+    cid = c["id"]
+    for who in ("devemp", "devemp2", "supemp"):                                    # employees: read-only, any team
+        assert client.get(f"{API}/changes", headers=as_user(who)).json()["total"] == 1, who
+        d = client.get(f"{API}/changes/{cid}", headers=as_user(who))
+        assert d.status_code == 200 and d.json()["can_manage"] is False, who
+        assert client.get(f"{API}/changes/{cid}/activity", headers=as_user(who)).status_code == 200
+        assert client.post(f"{API}/changes", json=FULL_CHANGE, headers=as_user(who)).status_code == 403
+        assert client.patch(f"{API}/changes/{cid}", json={"title": "Not allowed"}, headers=as_user(who)).status_code == 403
+        assert cmove(client, who, cid, "Submitted").status_code == 403
+    assert client.get(f"{API}/changes/{cid}", headers=as_user("supmgr")).json()["can_manage"] is False
 
 
 def test_manager_raises_and_scoping(client):
@@ -243,11 +250,15 @@ def test_manager_raises_and_scoping(client):
     assert c["number"].startswith("CHG-") and c["status"] == "Draft" and c["can_manage"] is True
     assert c["requester_name"] == "Devmgr" and c["team_name"] == "Development"
     assert c["releases"] == [] and c["approvals"] == []
-    assert client.get(f"{API}/changes", headers=as_user("supmgr")).json()["total"] == 0
-    assert client.get(f"{API}/changes/{c['id']}", headers=as_user("supmgr")).status_code == 404
+    other = client.get(f"{API}/changes/{c['id']}", headers=as_user("supmgr"))        # another team: can read, not change
+    assert other.status_code == 200 and other.json()["can_manage"] is False
+    assert client.get(f"{API}/changes", headers=as_user("supmgr")).json()["total"] == 1
     assert client.get(f"{API}/changes", headers=as_user("admin")).json()["total"] == 1
     admin_made = new_change(client, "admin", title="Admin change")
-    assert client.get(f"{API}/changes/{admin_made['id']}", headers=as_user("devmgr")).status_code == 404
+    seen = client.get(f"{API}/changes/{admin_made['id']}", headers=as_user("devmgr")).json()
+    assert seen["can_manage"] is False and seen["title"] == "Admin change"
+    assert client.patch(f"{API}/changes/{admin_made['id']}", json={"title": "Edited by manager"},
+                        headers=as_user("devmgr")).status_code == 403
 
 
 def test_change_validation_and_filters(client):
@@ -270,7 +281,7 @@ def test_change_edit_rules(client):
     cid = c["id"]
     ok = client.patch(f"{API}/changes/{cid}", json={"title": "Renamed change", "risk": "Low"}, headers=as_user("devmgr"))
     assert ok.status_code == 200 and ok.json()["title"] == "Renamed change" and ok.json()["risk"] == "Low"
-    assert client.patch(f"{API}/changes/{cid}", json={"title": "Nope nope"}, headers=as_user("supmgr")).status_code == 404
+    assert client.patch(f"{API}/changes/{cid}", json={"title": "Nope nope"}, headers=as_user("supmgr")).status_code == 403
     assert client.patch(f"{API}/changes/{cid}", json={}, headers=as_user("devmgr")).status_code == 422
     dates = client.patch(f"{API}/changes/{cid}", json={"planned_end": "2020-01-01T00:00:00Z"}, headers=as_user("devmgr"))
     assert dates.status_code == 422
@@ -311,7 +322,7 @@ def test_change_full_lifecycle_with_admin_approval(client):
         assert r.status_code == 200 and r.json()["status"] == step, r.text
     texts = [e["text"] for e in client.get(f"{API}/changes/{cid}/activity", headers=as_user("devmgr")).json()]
     assert "Change created" in texts and "Status changed from Implemented to Closed" in texts
-    assert client.get(f"{API}/changes/{cid}/activity", headers=as_user("supmgr")).status_code == 404
+    assert client.get(f"{API}/changes/{cid}/activity", headers=as_user("supmgr")).status_code == 200   # readable by all
 
 
 def test_change_needs_plans_before_approval(client):
@@ -352,14 +363,19 @@ def rmove(client, who, rid, to):
     return client.post(f"{API}/releases/{rid}/transition", json={"to_status": to}, headers=as_user(who))
 
 
-def test_releases_are_staff_only_and_scoped(client):
-    assert client.get(f"{API}/releases", headers=as_user("devemp")).status_code == 403
+def test_everyone_can_read_releases_but_only_staff_can_write(client):
+    assert client.get(f"{API}/releases").status_code == 401
     assert client.post(f"{API}/releases", json=FULL_RELEASE, headers=as_user("devemp")).status_code == 403
     r = new_release(client)
     assert r["number"].startswith("REL-") and r["status"] == "Planned" and r["owner_name"] == "Devmgr"
     assert r["changes"] == [] and r["approvals"] == [] and r["can_manage"] is True
-    assert client.get(f"{API}/releases/{r['id']}", headers=as_user("supmgr")).status_code == 404
-    assert client.get(f"{API}/releases", headers=as_user("supmgr")).json()["total"] == 0
+    for who in ("devemp", "supemp", "supmgr"):                                     # read-only for everyone else
+        d = client.get(f"{API}/releases/{r['id']}", headers=as_user(who))
+        assert d.status_code == 200 and d.json()["can_manage"] is False, who
+        assert client.get(f"{API}/releases", headers=as_user(who)).json()["total"] == 1, who
+        assert client.get(f"{API}/releases/{r['id']}/activity", headers=as_user(who)).status_code == 200
+        assert client.patch(f"{API}/releases/{r['id']}", json={"name": "Not allowed"}, headers=as_user(who)).status_code == 403
+        assert rmove(client, who, r["id"], "Under Review").status_code == 403
     assert client.get(f"{API}/releases", headers=as_user("admin")).json()["total"] == 1
 
 
@@ -385,9 +401,10 @@ def test_release_changes_and_lifecycle(client):
     in_change = client.get(f"{API}/changes/{cid}", headers=as_user("devmgr")).json()
     assert in_change["releases"][0]["number"] == rel["number"]
     foreign = new_change(client, "supmgr", title="Support change")
-    assert client.post(f"{API}/releases/{rid}/changes", json={"change_id": foreign["id"]},
-                       headers=as_user("devmgr")).status_code == 404
-    assert client.post(f"{API}/releases/{rid}/changes", json={"change_id": cid}, headers=as_user("supmgr")).status_code == 404
+    foreign_add = client.post(f"{API}/releases/{rid}/changes", json={"change_id": foreign["id"]},
+                              headers=as_user("devmgr"))                              # readable, but not theirs to add
+    assert foreign_add.status_code == 403 and foreign_add.json()["error"]["code"] == "forbidden"
+    assert client.post(f"{API}/releases/{rid}/changes", json={"change_id": cid}, headers=as_user("supmgr")).status_code == 403
 
     sent = rmove(client, "devmgr", rid, "Under Review")
     assert sent.status_code == 200 and sent.json()["approvals"][0]["status"] == "pending"
@@ -421,7 +438,7 @@ def test_release_remove_change_and_edit_rules(client):
                       headers=as_user("devmgr"))
     assert ok.status_code == 200 and ok.json()["environment"] == "UAT"
     assert client.patch(f"{API}/releases/{rid}", json={}, headers=as_user("devmgr")).status_code == 422
-    assert client.patch(f"{API}/releases/{rid}", json={"name": "Spy spy"}, headers=as_user("supmgr")).status_code == 404
+    assert client.patch(f"{API}/releases/{rid}", json={"name": "Spy spy"}, headers=as_user("supmgr")).status_code == 403
 
 
 def test_release_needs_scope_before_review_and_cannot_fake_approval(client):
@@ -489,11 +506,11 @@ def test_report_contents_and_scoping(client):
     raise_incident(client, "supemp", impact="Low", urgency="Low")             # P4, Support
     admin = client.get(f"{API}/reports/incidents_by_priority", headers=as_user("admin")).json()
     assert admin["scope"] == "All teams"
-    assert dict(zip(admin["chart"]["labels"], admin["chart"]["values"])) == {"P1": 1, "P4": 1}
+    assert dict(zip(admin["chart"]["labels"], admin["chart"]["values"])) == {"Critical": 1, "Low": 1}
     dev = client.get(f"{API}/reports/incidents_by_priority", headers=as_user("devmgr")).json()
-    assert dev["scope"] == "Your team" and dev["chart"]["labels"] == ["P1"]
+    assert dev["scope"] == "Your team" and dev["chart"]["labels"] == ["Critical"]
     open_inc = client.get(f"{API}/reports/open_incidents", headers=as_user("supmgr")).json()
-    assert len(open_inc["rows"]) == 1 and open_inc["rows"][0]["priority"] == "P4"
+    assert len(open_inc["rows"]) == 1 and open_inc["rows"][0]["priority"] == "Low"
     assert open_inc["rows"][0]["number"].startswith("INC-")
     csv_text = client.get(f"{API}/reports/open_incidents", params={"format": "csv"}, headers=as_user("admin")).text
     assert csv_text.startswith("﻿Incident,Description,Priority")

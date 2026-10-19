@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { Badge, ErrorBox, Field, FormModal, Loading, fmtTarget, useFetch, useToast } from '../components/ui'
+import { Badge, ErrorBox, Field, FormModal, Loading, fmtTarget, priorityLabel, useFetch, useToast } from '../components/ui'
 
 const LEVELS = ['High', 'Medium', 'Low']
 
@@ -78,7 +78,7 @@ export function Sla() {
           <div className="kpis">
             {sla.data.map((p) => (
               <div className="kpi" key={p.priority}>
-                <label>{p.priority} Response</label><b>{fmtTarget(p.response_minutes)}</b><small>Resolution {fmtTarget(p.resolution_minutes)}</small>
+                <label>{priorityLabel(p.priority)} Response</label><b>{fmtTarget(p.response_minutes)}</b><small>Resolution {fmtTarget(p.resolution_minutes)}</small>
               </div>
             ))}
             <div className="kpi"><label>Compliance (month)</label><b>{resolved ? `${Math.round((100 * within) / resolved)}%` : '—'}</b><small>{resolved} resolved this month</small></div>
@@ -92,7 +92,7 @@ export function Sla() {
                   const r = perf[p.priority]
                   return (
                     <tr key={p.priority}>
-                      <td><b>{p.priority}</b></td><td>{fmtTarget(p.response_minutes)}</td><td>{fmtTarget(p.resolution_minutes)}</td>
+                      <td><b>{priorityLabel(p.priority)}</b></td><td>{fmtTarget(p.response_minutes)}</td><td>{fmtTarget(p.resolution_minutes)}</td>
                       <td>{r?.resolved_this_month ?? 0}</td><td>{r?.within_sla ?? 0}</td><td>{r?.percent == null ? '—' : `${r.percent}%`}</td>
                       {me.role === 'admin' && <td><button className="btn2" onClick={() => setEdit(p)}>Edit</button></td>}
                     </tr>
@@ -114,11 +114,11 @@ function SlaModal({ policy, onClose, onSaved }) {
   const [reso, setReso] = useState(policy.resolution_minutes)
   const submit = async () => {
     await api.put(`/sla/${policy.priority}`, { response_minutes: Number(resp), resolution_minutes: Number(reso) })
-    toast(`${policy.priority} targets updated.`)
+    toast(`${priorityLabel(policy.priority)} targets updated.`)
     onSaved()
   }
   return (
-    <FormModal title={`Edit ${policy.priority} targets`} onClose={onClose} onSubmit={submit} width={480}>
+    <FormModal title={`Edit ${priorityLabel(policy.priority)} targets`} onClose={onClose} onSubmit={submit} width={480}>
       <div className="form">
         <Field label="Response (minutes)" hint={`= ${fmtTarget(Number(resp) || 0)}`}><input type="number" min="1" value={resp} onChange={(e) => setResp(e.target.value)} required /></Field>
         <Field label="Resolution (minutes)" hint={`= ${fmtTarget(Number(reso) || 0)}`}><input type="number" min="1" value={reso} onChange={(e) => setReso(e.target.value)} required /></Field>

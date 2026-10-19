@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import {
-  Empty, ErrorBox, Field, FormModal, Loading, Pager, PersonSelect, Priority, RecordPicker, StatusBadge, Text, Timeline,
+  Empty, ErrorBox, Field, FormModal, Loading, PRIORITIES, Pager, PersonSelect, Priority, RecordPicker, StatusBadge, Text, Timeline,
   Workflow, fmtDate, useAction, useDebounced, useFetch,
 } from '../components/ui'
 
@@ -18,7 +18,9 @@ export function ProblemList() {
   const [priority, setPriority] = useState('')
   const [openOnly, setOpenOnly] = useState(false)
   const [offset, setOffset] = useState(0)
-  const [creating, setCreating] = useState(false)
+  const [sp, setSp] = useSearchParams()
+  const [creating, setCreating] = useState(sp.get('new') === '1')
+  useEffect(() => { if (sp.get('new')) { sp.delete('new'); setSp(sp, { replace: true }) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const dq = useDebounced(q)
   useEffect(() => setOffset(0), [dq, status, priority, openOnly])
   const { data, error, loading } = useFetch(
@@ -34,7 +36,7 @@ export function ProblemList() {
         <div className="filters">
           <input placeholder="Search problems" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search problems" />
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
-          <select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority"><option value="">All priorities</option>{['P1', 'P2', 'P3', 'P4'].map((p) => <option key={p}>{p}</option>)}</select>
+          <select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority"><option value="">All priorities</option>{[...PRIORITIES].reverse().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           <label><input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} /> Open only</label>
         </div>
         <button className="btn" onClick={() => setCreating(true)}>+ New Problem</button>
@@ -79,7 +81,7 @@ function NewProblem({ onClose, onCreated }) {
       <div className="form">
         <Field label="Title" wide><input value={f.title} onChange={set('title')} minLength={3} maxLength={200} required autoFocus /></Field>
         <Field label="Service"><select value={f.service_id} onChange={set('service_id')}><option value="">Not sure / other</option>{(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-        {me.role !== 'employee' && <Field label="Priority"><select value={f.priority} onChange={set('priority')}><option value="">Default (P3)</option>{['P1', 'P2', 'P3', 'P4'].map((p) => <option key={p}>{p}</option>)}</select></Field>}
+        {me.role !== 'employee' && <Field label="Priority"><select value={f.priority} onChange={set('priority')}><option value="">Default (Medium)</option>{PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>}
         <Field label="Description / business impact" wide><textarea value={f.description} onChange={set('description')} /></Field>
       </div>
     </FormModal>
@@ -197,7 +199,7 @@ function ProblemForm({ p, me, onSaved }) {
     <form className="form" onSubmit={save}>
       <Field label="Title" wide>{canEdit ? <input value={f.title} onChange={set('title')} minLength={3} required /> : <Text value={p.title} />}</Field>
       <Field label="Service">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={p.service_name} />}</Field>
-      <Field label="Priority">{sEdit ? <select value={f.priority} onChange={set('priority')}>{['P1', 'P2', 'P3', 'P4'].map((x) => <option key={x}>{x}</option>)}</select> : <Text value={p.priority} />}</Field>
+      <Field label="Priority">{sEdit ? <select value={f.priority} onChange={set('priority')}>{PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select> : <Priority p={p.priority} />}</Field>
       <Field label="Description / business impact" wide>{canEdit ? <textarea value={f.description} onChange={set('description')} /> : <Text value={p.description} />}</Field>
       <Field label="Root cause" wide>{sEdit ? <textarea value={f.root_cause} onChange={set('root_cause')} /> : <Text value={p.root_cause} />}</Field>
       <Field label="Workaround" wide>{sEdit ? <textarea value={f.workaround} onChange={set('workaround')} /> : <Text value={p.workaround} />}</Field>

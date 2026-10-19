@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import { IncidentDetail, IncidentList } from './pages/Incidents'
 import { ProblemDetail, ProblemList } from './pages/Problems'
+import { DefectDetail, DefectList } from './pages/Defects'
 import { ChangeDetail, ChangeList } from './pages/Changes'
 import { ReleaseDetail, ReleaseList } from './pages/Releases'
 import Approvals from './pages/Approvals'
@@ -39,6 +40,8 @@ export default function App() {
         <Route path="incidents/:id" element={g('incidents', <IncidentDetail />)} />
         <Route path="problems" element={g('problems', <ProblemList />)} />
         <Route path="problems/:id" element={g('problems', <ProblemDetail />)} />
+        <Route path="defects" element={g('defects', <DefectList />)} />
+        <Route path="defects/:id" element={g('defects', <DefectDetail />)} />
         <Route path="changes" element={g('changes', <ChangeList />)} />
         <Route path="changes/:id" element={g('changes', <ChangeDetail />)} />
         <Route path="releases" element={g('releases', <ReleaseList />)} />

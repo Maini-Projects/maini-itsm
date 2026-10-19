@@ -10,8 +10,8 @@ from ..rbac import Principal, require_roles
 
 router = APIRouter(tags=["audit"])
 
-Table = Literal["incidents", "problems", "changes", "releases", "approvals", "profiles", "sla_policies"]
-LABEL = {"incidents": "incident", "problems": "problem", "changes": "change", "releases": "release",
+Table = Literal["incidents", "problems", "defects", "changes", "releases", "approvals", "profiles", "sla_policies"]
+LABEL = {"incidents": "incident", "problems": "problem", "defects": "defect", "changes": "change", "releases": "release",
          "approvals": "approval", "profiles": "user", "sla_policies": "SLA target"}
 VERB = {"INSERT": "Created", "UPDATE": "Updated", "DELETE": "Deleted"}
 
