@@ -188,6 +188,18 @@ select t.check('audit log records defect changes with actor',
             and actor_id = '00000000-0000-0000-0000-0000000000b1'
             and old_values ->> 'status' = 'Resolved' and new_values ->> 'status' = 'Closed'));
 
+-- ---- attachments: 1 MB limit and known record types -----------------------
+insert into attachments(record_type, record_id, file_name, content_type, size_bytes, storage_path, uploaded_by) values ('incident', '10000000-0000-0000-0000-000000000001', 'a.png', 'image/png', 1048576, 'incident/x/ok.png', '00000000-0000-0000-0000-0000000000c1');
+select t.check('a file of exactly 1 MB is accepted', (select count(*) = 1 from attachments));
+select t.fails('a file over 1 MB is rejected by the database',
+  $$insert into attachments(record_type, record_id, file_name, content_type, size_bytes, storage_path, uploaded_by) values ('incident', '10000000-0000-0000-0000-000000000001', 'a.png', 'image/png', 1048577, 'incident/x/big.png', '00000000-0000-0000-0000-0000000000c1')$$, 'size_bytes');
+select t.fails('an empty file is rejected',
+  $$insert into attachments(record_type, record_id, file_name, content_type, size_bytes, storage_path, uploaded_by) values ('incident', '10000000-0000-0000-0000-000000000001', 'a.png', 'image/png', 0, 'incident/x/empty.png', '00000000-0000-0000-0000-0000000000c1')$$, 'size_bytes');
+select t.fails('an unknown record type is rejected',
+  $$insert into attachments(record_type, record_id, file_name, content_type, size_bytes, storage_path, uploaded_by) values ('invoice', '10000000-0000-0000-0000-000000000001', 'a.png', 'image/png', 1000, 'invoice/x/a.png', '00000000-0000-0000-0000-0000000000c1')$$, 'record_type');
+select t.fails('two files cannot share one storage path',
+  $$insert into attachments(record_type, record_id, file_name, content_type, size_bytes, storage_path, uploaded_by) values ('incident', '10000000-0000-0000-0000-000000000001', 'a.png', 'image/png', 1000, 'incident/x/ok.png', '00000000-0000-0000-0000-0000000000c1')$$, 'storage_path');
+
 -- ---- changes: manager raises, admin approves ------------------------------
 select t.fails('employee cannot raise a change',
   $$insert into changes(title, requester_id) values ('x','00000000-0000-0000-0000-0000000000c1')$$, 'forbidden');

@@ -55,11 +55,12 @@ function qs(params) {
 
 async function send(method, path, { body, params } = {}) {
   const headers = {}
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData // a file upload: the browser sets the type
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
   if (session) headers.Authorization = `Bearer ${session.access_token}`
   try {
     return await fetch(`${BASE}/api/v1${path}${qs(params)}`, {
-      method, headers, body: body !== undefined ? JSON.stringify(body) : undefined,
+      method, headers, body: body !== undefined ? (isForm ? body : JSON.stringify(body)) : undefined,
     })
   } catch {
     throw new ApiError(0, 'network', 'Could not reach the server. Check your connection and try again.')
@@ -96,6 +97,7 @@ export const api = {
   post: (path, body) => request('POST', path, { body: body ?? {} }),
   patch: (path, body) => request('PATCH', path, { body }),
   put: (path, body) => request('PUT', path, { body }),
+  upload: (path, form) => request('POST', path, { body: form }),
   del: (path) => request('DELETE', path),
   async download(path, params, filename) {
     const res = await request('GET', path, { params }, true)

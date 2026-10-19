@@ -90,6 +90,27 @@ class FakeAuthAdmin:
 DEFAULT_PASSWORD = "password123"
 
 
+class FakeFileStore:
+    """Replaces Supabase Storage: files are kept in a dict."""
+    def __init__(self):
+        self.files, self.fail_puts = {}, False
+
+    def put(self, path, data, content_type):
+        if self.fail_puts:
+            from app.errors import api_error
+            raise api_error(503, "storage_unavailable", "File storage could not be reached. Try again in a moment.")
+        self.files[path] = (data, content_type)
+
+    def get(self, path):
+        from app.errors import api_error
+        if path not in self.files:
+            raise api_error(404, "file_missing", "The file is no longer in storage.")
+        return self.files[path][0]
+
+    def delete(self, path):
+        self.files.pop(path, None)
+
+
 class FakeAuthClient:
     """Replaces Supabase's password sign-in. Seeded users sign in as <key>@test.local with DEFAULT_PASSWORD
     (unless FakeAuthAdmin.set_password changed it); the token is "t-<key>", the refresh token "r-<key>"."""
@@ -118,6 +139,7 @@ def app(db_conninfo):
     os.environ["DATABASE_URL"] = db_conninfo
     os.environ["CORS_ORIGINS"] = "http://localhost:5173"
     from app.auth import get_auth_admin, get_auth_client, get_token_verifier
+    from app.storage import get_file_store
     from app.errors import api_error
     from app.main import app as fastapi_app
 
@@ -132,6 +154,9 @@ def app(db_conninfo):
     fastapi_app.dependency_overrides[get_auth_admin] = lambda: fake_admin
     fastapi_app.dependency_overrides[get_auth_client] = lambda: FakeAuthClient(fake_admin)
     fastapi_app.state.fake_auth_admin = fake_admin
+    fake_store = FakeFileStore()
+    fastapi_app.dependency_overrides[get_file_store] = lambda: fake_store
+    fastapi_app.state.fake_file_store = fake_store
     return fastapi_app
 
 
@@ -147,7 +172,7 @@ def clean(raw, app):
     """Every test starts from: the six seeded people, default services and SLA targets, no tickets."""
     yield
     keep = list(IDS.values())
-    raw.execute("truncate incident_comments, defect_comments, approvals, problem_incidents, release_changes, incidents, "
+    raw.execute("truncate incident_comments, defect_comments, attachments, approvals, problem_incidents, release_changes, incidents, "
                 "problems, defects, changes, releases, audit_log restart identity")
     raw.execute("delete from profiles where id <> all(%s)", (keep,))
     raw.execute("delete from auth.users where id <> all(%s)", (keep,))
@@ -161,6 +186,8 @@ def clean(raw, app):
     app.state.fake_auth_admin.created.clear()
     app.state.fake_auth_admin.deleted.clear()
     app.state.fake_auth_admin.passwords.clear()
+    app.state.fake_file_store.files.clear()
+    app.state.fake_file_store.fail_puts = False
 
 
 def as_user(who: str) -> dict:

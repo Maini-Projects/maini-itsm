@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { Field, FormModal, useToast } from './ui'
+import { Field, FormModal, roleLabel, useToast } from './ui'
 
 const SECTIONS = [
   { title: 'Service Management', items: [['incidents', 'Incidents'], ['problems', 'Problems'], ['defects', 'Defects'], ['changes', 'Changes'], ['releases', 'Releases']] },
@@ -86,7 +86,7 @@ export default function Layout() {
         </div>
         {menu && (
           <div className="usermenu">
-            <div className="who"><b>{me.full_name}</b><span>{me.email}<br />{me.role}{me.team_name ? ` · ${me.team_name} team` : ''}</span></div>
+            <div className="who"><b>{me.full_name}</b><span>{me.email}<br />{roleLabel(me.role)}{me.team_name ? ` · ${me.team_name} team` : ''}</span></div>
             <button onClick={() => { setMenu(false); setPw(true) }}>Change password</button>
             <button onClick={signOut}>Sign out</button>
           </div>

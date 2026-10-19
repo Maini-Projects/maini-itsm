@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import NoteBox from '../components/NoteBox'
 import {
   Badge, Empty, ErrorBox, Field, FormModal, Loading, OpenFor, PRIORITIES, Pager, PersonSelect, Priority, StatusBadge, Text,
-  Timeline, Workflow, fmtDate, useAction, useDebounced, useFetch,
+  Timeline, Workflow, fmtDate, roleLabel, useAction, useDebounced, useFetch,
+  useTab,
 } from '../components/ui'
 
 const STATUSES = ['New', 'Assigned', 'In Progress', 'Pending', 'Resolved', 'Closed']
@@ -112,7 +114,7 @@ function NewIncident({ onClose, onCreated }) {
           <Field label="Raise on behalf of" hint="Optional. Sets the team for the incident.">
             <select value={f.requester_id} onChange={set('requester_id')}>
               <option value="">Myself</option>
-              {(people.data || []).filter((p) => p.status === 'active').map((p) => <option key={p.id} value={p.id}>{p.full_name} ({p.team_name || p.role})</option>)}
+              {(people.data || []).filter((p) => p.status === 'active').map((p) => <option key={p.id} value={p.id}>{p.full_name} ({p.team_name || roleLabel(p.role)})</option>)}
             </select>
           </Field>
         )}
@@ -153,7 +155,7 @@ export function IncidentDetail() {
   const inc = useFetch(() => api.get(`/incidents/${id}`), [id])
   const activity = useFetch(() => api.get(`/incidents/${id}/activity`), [id])
   const assignable = useFetch(() => (inc.data?.can_manage ? api.get('/users/assignable') : []), [id, inc.data?.can_manage])
-  const [tab, setTab] = useState('details')
+  const [tab, setTab] = useTab(['details', 'activity', 'resolution'])
   const [run, busy] = useAction()
   const [resolving, setResolving] = useState(null)
 
@@ -192,8 +194,8 @@ export function IncidentDetail() {
           )}
           {tab === 'activity' && (
             <div className="incident-activity">
-              <NoteBox id={id} staff={i.can_manage} onAdded={() => activity.reload()} />
-              <Timeline events={activity.data} />
+              <NoteBox kind="incidents" id={id} staff={i.can_manage} ownerLabel="requester" onAdded={() => activity.reload()} />
+              <Timeline events={activity.data} onChanged={() => activity.reload()} />
             </div>
           )}
         </div>
@@ -285,22 +287,5 @@ function DetailsForm({ inc, me, onSaved, statusActions, statusBusy, onStatus }) 
       {!ro && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
       {ro && inc.status !== 'Closed' && !staff && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>You can edit your incident while it is New. After that, the support team works on it — add a note in Activity to update them.</div>}
     </form>
-  )
-}
-
-function NoteBox({ id, staff, onAdded }) {
-  const [body, setBody] = useState('')
-  const [internal, setInternal] = useState(false)
-  const [run, busy] = useAction()
-  const add = () => run(async () => { await api.post(`/incidents/${id}/comments`, { body, internal: staff && internal }); setBody(''); setInternal(false); onAdded() }, 'Note added.')
-  return (
-    <div className="add-note-box" style={{ marginBottom: 16 }}>
-      <label className="cap" htmlFor="note">Add a note</label>
-      <textarea id="note" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Add an update or a question…" />
-      <div className="add-note-actions">
-        {staff ? <label className="checkrow"><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> Internal note (hidden from the requester)</label> : <span />}
-        <button className="btn" disabled={!body.trim() || busy} onClick={add}>Add note</button>
-      </div>
-    </div>
   )
 }

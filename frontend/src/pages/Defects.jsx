@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import NoteBox from '../components/NoteBox'
 import {
   Badge, Empty, ErrorBox, Field, FormModal, Loading, Pager, PersonSelect, SeverityBadge, StatusBadge, Text,
   Timeline, Workflow, fmtDate, useAction, useDebounced, useFetch,
+  useTab,
 } from '../components/ui'
 
 const STATUSES = ['New', 'Assigned', 'In Progress', 'Pending', 'Resolved', 'Closed']
@@ -150,7 +152,7 @@ export function DefectDetail() {
   const def = useFetch(() => api.get(`/defects/${id}`), [id])
   const activity = useFetch(() => api.get(`/defects/${id}/activity`), [id])
   const assignable = useFetch(() => (def.data?.can_manage ? api.get('/users/assignable') : []), [id, def.data?.can_manage])
-  const [tab, setTab] = useState('details')
+  const [tab, setTab] = useTab(['details', 'activity', 'resolution'])
   const [run, busy] = useAction()
   const [resolving, setResolving] = useState(false)
 
@@ -188,8 +190,8 @@ export function DefectDetail() {
           )}
           {tab === 'activity' && (
             <div className="incident-activity">
-              <NoteBox id={id} staff={d.can_manage} onAdded={() => activity.reload()} />
-              <Timeline events={activity.data} />
+              <NoteBox kind="defects" id={id} staff={d.can_manage} ownerLabel="reporter" onAdded={() => activity.reload()} />
+              <Timeline events={activity.data} onChanged={() => activity.reload()} />
             </div>
           )}
         </div>
@@ -288,22 +290,5 @@ function DetailsForm({ defect, me, onSaved, statusActions, statusBusy, onStatus 
       {!ro && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
       {ro && defect.status !== 'Closed' && !staff && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>You can edit your defect while it is New. After that, the team works on it — add a note in Activity to update them.</div>}
     </form>
-  )
-}
-
-function NoteBox({ id, staff, onAdded }) {
-  const [body, setBody] = useState('')
-  const [internal, setInternal] = useState(false)
-  const [run, busy] = useAction()
-  const add = () => run(async () => { await api.post(`/defects/${id}/comments`, { body, internal: staff && internal }); setBody(''); setInternal(false); onAdded() }, 'Note added.')
-  return (
-    <div className="add-note-box" style={{ marginBottom: 16 }}>
-      <label className="cap" htmlFor="defect-note">Add a note</label>
-      <textarea id="defect-note" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Add an update or a question…" />
-      <div className="add-note-actions">
-        {staff ? <label className="checkrow"><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> Internal note (hidden from the reporter)</label> : <span />}
-        <button className="btn" disabled={!body.trim() || busy} onClick={add}>Add note</button>
-      </div>
-    </div>
   )
 }

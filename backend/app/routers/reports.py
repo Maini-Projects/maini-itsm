@@ -19,6 +19,7 @@ router = APIRouter(tags=["reports"])
 
 NOT_OPEN = "('Resolved','Closed')"
 ROW_LIMIT = 5000
+ROLE_NAMES = {"admin": "Administrator", "manager": "Support Engineer", "employee": "Customer"}
 PRIORITY_NAMES = {"P1": "Critical", "P2": "High", "P3": "Medium", "P4": "Low"}
 
 
@@ -233,6 +234,8 @@ def run_report(key: str, format: Literal["json", "csv"] = "json", user: Principa
     for r in rows:  # priorities are shown as Critical / High / Medium / Low
         if r.get("priority") in PRIORITY_NAMES:
             r["priority"] = PRIORITY_NAMES[r["priority"]]
+        if r.get("approver_role") in ROLE_NAMES:
+            r["approver_role"] = ROLE_NAMES[r["approver_role"]]
     if chart:
         chart["labels"] = [PRIORITY_NAMES.get(label, label) for label in chart["labels"]]
     if format == "csv":

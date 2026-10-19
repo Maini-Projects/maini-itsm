@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
 
+    # Supabase Storage bucket for attached files (created by migration 005; private)
+    attachments_bucket: str = "attachments"
+
     # Comma-separated list of front-end addresses allowed to call the API from a browser
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 

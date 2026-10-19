@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from ..activity import timeline
+from ..activity import attachment_events, timeline
 from ..db import fetch_all, fetch_one, get_conn
 from ..errors import api_error
 from ..rbac import Principal, can_manage, current_user, require_roles
@@ -100,8 +100,9 @@ def get_change(change_id: UUID, user: Principal = Depends(current_user), conn=De
 
 @router.get("/changes/{change_id}/activity")
 def change_activity(change_id: UUID, user: Principal = Depends(current_user), conn=Depends(get_conn)):
-    load(conn, user, change_id)
-    return timeline(conn, "changes", change_id)
+    chg = load(conn, user, change_id)
+    events = timeline(conn, "changes", change_id) + attachment_events(conn, user, "change", change_id, chg)
+    return sorted(events, key=lambda e: e["at"], reverse=True)
 
 
 # ---- create / edit -------------------------------------------------------------------------
@@ -182,7 +183,7 @@ def transition_change(change_id: UUID, body: TransitionIn, user: Principal = Dep
     if not can_manage(user, chg):
         raise api_error(403, "forbidden", "You can only move changes of your own team.")
     if chg["status"] == "Approval Pending":
-        raise api_error(409, "awaiting_approval", "This change is waiting for an admin's decision.")
+        raise api_error(409, "awaiting_approval", "This change is waiting for an Administrator's decision.")
     if body.to_status == "Approval Pending":
         missing = [label for key, label in (("implementation_plan", "implementation plan"),
                                             ("backout_plan", "backout plan"), ("planned_start", "planned start"))

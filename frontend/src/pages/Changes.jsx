@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import NoteBox from '../components/NoteBox'
 import ApprovalBox from '../components/ApprovalBox'
 import {
   Badge, Empty, ErrorBox, Field, FormModal, Loading, Pager, RiskBadge, StatusBadge, Text, Timeline, Workflow, fmtDate,
   fmtShort, fromInputDate, toInputDate, useAction, useDebounced, useFetch,
+  useTab,
 } from '../components/ui'
 
 const STATUSES = ['Draft', 'Submitted', 'Under Review', 'Approval Pending', 'Scheduled', 'Implementation', 'Implemented', 'Closed']
@@ -31,7 +33,7 @@ export function ChangeList() {
     <>
       <div className="eyebrow">Change Management</div>
       <h2 className="title">Change Requests</h2>
-      <p className="sub">Standard, normal and emergency changes with risk, approval and scheduling. Managers raise changes; an admin approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
+      <p className="sub">Standard, normal and emergency changes with risk, approval and scheduling. Support Engineers raise changes; an Administrator approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
         <div className="filters">
           <input placeholder="Search changes" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search changes" />
@@ -109,7 +111,7 @@ export function ChangeDetail() {
   const navigate = useNavigate()
   const chg = useFetch(() => api.get(`/changes/${id}`), [id])
   const activity = useFetch(() => api.get(`/changes/${id}/activity`), [id])
-  const [tab, setTab] = useState('details')
+  const [tab, setTab] = useTab(['details', 'activity'])
   const [run, busy] = useAction()
 
   if (chg.loading && !chg.data) return <Loading />
@@ -133,7 +135,12 @@ export function ChangeDetail() {
             {[['details', 'Details'], ['activity', 'Activity']].map(([k, label]) => <button key={k} className={`tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{label}</button>)}
           </div>
           {tab === 'details' && <ChangeForm c={c} me={me} onSaved={refresh} />}
-          {tab === 'activity' && <div className="incident-activity"><Timeline events={activity.data} /></div>}
+          {tab === 'activity' && (
+            <div className="incident-activity">
+              <NoteBox kind="changes" id={id} notes={false} onAdded={() => activity.reload()} />
+              <Timeline events={activity.data} onChanged={() => activity.reload()} />
+            </div>
+          )}
         </div>
         <div>
           <div className="side">
@@ -188,7 +195,7 @@ function ChangeForm({ c, me, onSaved }) {
       <Field label="Backout plan" wide>{canEdit ? <textarea value={f.backout_plan} onChange={set('backout_plan')} /> : <Text value={c.backout_plan} />}</Field>
       <Field label="Test plan" wide>{canEdit ? <textarea value={f.test_plan} onChange={set('test_plan')} /> : <Text value={c.test_plan} />}</Field>
       {canEdit && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
-      {!canEdit && c.status !== 'Closed' && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>A change can be edited while it is a Draft (admins can edit until it is closed).</div>}
+      {!canEdit && c.status !== 'Closed' && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>A change can be edited while it is a Draft (Administrators can edit until it is closed).</div>}
     </form>
   )
 }

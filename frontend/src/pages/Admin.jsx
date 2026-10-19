@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { Badge, Empty, ErrorBox, Field, FormModal, Loading, useFetch, useToast } from '../components/ui'
+import { Badge, Empty, ErrorBox, Field, FormModal, Loading, roleLabel, useFetch, useToast } from '../components/ui'
 
 const ROLES = ['admin', 'manager', 'employee']
 
@@ -16,11 +16,11 @@ export default function Admin() {
     <>
       <div className="eyebrow">Administration</div>
       <h2 className="title">Users & Teams</h2>
-      <p className="sub">Create accounts, set roles and teams, disable access and reset passwords. Each team has at most one manager.</p>
+      <p className="sub">Create accounts, set roles and teams, disable access and reset passwords. Each team has at most one Support Engineer.</p>
       <div className="toolbar">
         <div className="filters">
           <input placeholder="Search name or email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search users" />
-          <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role"><option value="">All roles</option>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
+          <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role"><option value="">All roles</option>{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select>
         </div>
         <button className="btn" onClick={() => setModal({ kind: 'new' })}>+ New User</button>
       </div>
@@ -31,7 +31,7 @@ export default function Admin() {
           <tbody>
             {data?.map((u) => (
               <tr key={u.id}>
-                <td><b>{u.full_name}</b>{u.id === me.id && <> <Badge tone="blue">You</Badge></>}</td><td>{u.email}</td><td>{u.role}</td><td>{u.team_name || '—'}</td>
+                <td><b>{u.full_name}</b>{u.id === me.id && <> <Badge tone="blue">You</Badge></>}</td><td>{u.email}</td><td>{roleLabel(u.role)}</td><td>{u.team_name || '—'}</td>
                 <td><Badge tone={u.status === 'active' ? 'green' : u.status === 'pending' ? 'amber' : 'gray'}>{u.status}</Badge></td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   <button className="btn2" onClick={() => setModal({ kind: 'edit', user: u })}>Edit</button>{' '}
@@ -57,7 +57,7 @@ function UserModal({ user, self, teams, onClose, onSaved }) {
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
   const needsTeam = f.role !== 'admin'
   const submit = async () => {
-    if (needsTeam && !f.team_id) throw new Error('Choose a team for managers and employees.')
+    if (needsTeam && !f.team_id) throw new Error('Choose a team for Support Engineers and Customers.')
     const team_id = needsTeam ? f.team_id : null
     if (user) await api.patch(`/users/${user.id}`, { full_name: f.full_name, role: f.role, team_id, status: f.status })
     else await api.post('/users', { email: f.email.trim(), full_name: f.full_name, password: f.password, role: f.role, team_id })
@@ -71,13 +71,13 @@ function UserModal({ user, self, teams, onClose, onSaved }) {
         <Field label="Email">{user ? <div className="ro">{user.email}</div> : <input type="email" value={f.email} onChange={set('email')} required />}</Field>
         {!user && <Field label="Temporary password" hint="At least 8 characters. They can change it after signing in."><input type="text" value={f.password} onChange={set('password')} minLength={8} required autoComplete="off" /></Field>}
         <Field label="Role">
-          <select value={f.role} onChange={set('role')} disabled={self}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
+          <select value={f.role} onChange={set('role')} disabled={self}>{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select>
         </Field>
-        <Field label="Team" hint={needsTeam ? 'Required. A manager sees only their own team.' : 'Admins are not tied to a team.'}>
+        <Field label="Team" hint={needsTeam ? 'Required. A Support Engineer sees only their own team.' : 'Administrators are not tied to a team.'}>
           <select value={needsTeam ? f.team_id : ''} onChange={set('team_id')} disabled={!needsTeam}><option value="">{needsTeam ? 'Choose a team' : '—'}</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
         </Field>
         {user && <Field label="Status"><select value={f.status} onChange={set('status')} disabled={self}><option value="active">active</option><option value="disabled">disabled</option></select></Field>}
-        {self && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>You cannot remove your own admin access or disable yourself.</div>}
+        {self && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>You cannot remove your own Administrator access or disable yourself.</div>}
       </div>
     </FormModal>
   )

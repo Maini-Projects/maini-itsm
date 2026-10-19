@@ -34,7 +34,7 @@ def current_user(user_id: UUID = Depends(verified_user_id), conn=Depends(get_con
         {"id": user_id},
     )
     if row is None:
-        raise api_error(403, "no_profile", "This login has no profile in the portal. Ask an administrator.")
+        raise api_error(403, "no_profile", "This login has no profile in the portal. Ask an Administrator.")
     if row["status"] != "active":
         raise api_error(403, "account_not_active", "This account is not active.")
     return Principal(**{k: row[k] for k in ("id", "email", "full_name", "role", "team_id")})

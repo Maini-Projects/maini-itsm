@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import { DecisionModal } from '../components/ApprovalBox'
-import { Badge, Empty, ErrorBox, Loading, Priority, RiskBadge, fmtShort, useFetch, useToast } from '../components/ui'
+import { Badge, Empty, ErrorBox, Loading, Priority, RiskBadge, fmtShort, roleLabel, useFetch, useToast } from '../components/ui'
 
 const TYPE_LABEL = { incident: 'Incident closure', change: 'Change', release: 'Release' }
 const PATH = { incident: 'incidents', change: 'changes', release: 'releases' }
@@ -22,7 +22,7 @@ export default function Approvals() {
       <div className="eyebrow">Governance</div>
       <h2 className="title">Approval Queue</h2>
       <p className="sub">
-        {me.role === 'admin' ? 'Changes and releases waiting for your decision.' : 'The status of the changes and releases you raised. An admin decides them.'}
+        {me.role === 'admin' ? 'Changes and releases waiting for your decision.' : 'The status of the changes and releases you raised. An Administrator decides them.'}
       </p>
       <div className="toolbar">
         <div className="filters">
@@ -43,7 +43,7 @@ export default function Approvals() {
                 <td><b>{a.title}</b></td>
                 <td>{a.priority ? <Priority p={a.priority} /> : a.risk ? <RiskBadge risk={a.risk} /> : a.environment || '—'}</td>
                 <td>{a.requested_by_name}</td>
-                <td>{a.approver_role === 'admin' ? 'Admin' : `${a.team_name || ''} manager`.trim()}</td>
+                <td>{a.approver_role === 'admin' ? roleLabel('admin') : `${a.team_name || ''} ${roleLabel('manager')}`.trim()}</td>
                 <td>{fmtShort(a.created_at)}</td>
                 <td>
                   <Badge tone={{ pending: 'amber', approved: 'green', rejected: 'red' }[a.status]}>{a.status}</Badge>
@@ -55,7 +55,7 @@ export default function Approvals() {
                       <button className="btn" onClick={() => setDeciding({ id: a.id, decision: 'approved' })}>Approve</button>
                       <button className="danger" onClick={() => setDeciding({ id: a.id, decision: 'rejected' })}>Reject</button>
                     </span>
-                  ) : a.status === 'pending' ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>Awaiting {a.approver_role === 'admin' ? 'admin' : 'team manager'}</span> : '—'}
+                  ) : a.status === 'pending' ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>Awaiting {a.approver_role === 'admin' ? 'Administrator' : `team ${roleLabel('manager')}`}</span> : '—'}
                 </td>
               </tr>
             ))}

@@ -66,7 +66,7 @@ def assignable_users(user: Principal = Depends(require_roles("admin", "manager")
 def create_user(body: UserIn, _: Principal = Depends(require_roles("admin")), conn=Depends(get_conn),
                 auth_admin: AuthAdmin = Depends(get_auth_admin)):
     if body.role != "admin" and body.team_id is None:
-        raise api_error(422, "team_required", "Managers and employees must belong to a team.")
+        raise api_error(422, "team_required", "Support Engineers and Customers must belong to a team.")
     login_id = auth_admin.create_user(body.email, body.password)
     try:
         conn.execute(
@@ -87,7 +87,7 @@ def update_user(user_id: UUID, body: UserPatch, admin: Principal = Depends(requi
     if not changes:
         raise api_error(422, "nothing_to_update", "Send at least one field to change.")
     if user_id == admin.id and (changes.get("role", "admin") != "admin" or changes.get("status", "active") != "active"):
-        raise api_error(409, "cannot_modify_self", "You cannot remove your own admin access or disable yourself.")
+        raise api_error(409, "cannot_modify_self", "You cannot remove your own Administrator access or disable yourself.")
     sets = ", ".join(f"{col} = %({col})s" for col in changes)  # column names come from the model, not the caller
     updated = fetch_one(conn, f"update profiles set {sets} where id = %(id)s returning id", {**changes, "id": user_id})
     if updated is None:

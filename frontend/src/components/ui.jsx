@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 
 // ---- formatting ----------------------------------------------------------------------------
@@ -32,6 +33,11 @@ export function fmtTarget(m) {
   return `${m}m`
 }
 
+// ---- role names ---------------------------------------------------------------------------
+// Roles are stored as admin / manager / employee; these are the names people see.
+export const ROLE_LABELS = { admin: 'Administrator', manager: 'Support Engineer', employee: 'Customer' }
+export const roleLabel = (r) => ROLE_LABELS[r] || r
+
 // ---- badges --------------------------------------------------------------------------------
 const STATUS_TONE = {
   New: 'blue', Assigned: 'amber', 'In Progress': 'blue', Pending: 'gray', Resolved: 'green',
@@ -64,6 +70,19 @@ export function OpenFor({ inc }) {
   const end = done ? new Date(inc.resolved_at || inc.closed_at || Date.now()) : new Date()
   const age = fmtAge(end - new Date(inc.created_at))
   return <span title={`Raised ${fmtDate(inc.created_at)}`}>{done ? `Resolved in ${age}` : `Open for ${age}`}</span>
+}
+
+// The open tab of a detail page lives in the address (?tab=attachments), so a reload or a shared link opens the same tab.
+export function useTab(valid, initial = 'details') {
+  const [sp, setSp] = useSearchParams()
+  const wanted = sp.get('tab')
+  const tab = valid.includes(wanted) ? wanted : initial
+  const setTab = (t) => {
+    const next = new URLSearchParams(sp)
+    if (t === initial) next.delete('tab'); else next.set('tab', t)
+    setSp(next, { replace: true }) // no extra browser-history entry for every tab click
+  }
+  return [tab, setTab]
 }
 
 // ---- data loading --------------------------------------------------------------------------
@@ -193,7 +212,17 @@ export function Workflow({ steps, current }) {
   )
 }
 
-export function Timeline({ events }) {
+export const fmtSize = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`)
+
+export function Timeline({ events, onChanged }) {
+  const toast = useToast()
+  const download = async (a) => {
+    try { await api.download(`/attachments/${a.id}/download`, undefined, a.file_name) } catch (e) { toast(e.message, 'err') }
+  }
+  const remove = async (a) => {
+    if (!window.confirm(`Remove “${a.file_name}”?`)) return
+    try { await api.del(`/attachments/${a.id}`); toast('File removed.'); onChanged() } catch (e) { toast(e.message, 'err') }
+  }
   if (!events) return <Loading />
   if (!events.length) return <Empty>No activity yet.</Empty>
   return (
@@ -207,6 +236,13 @@ export function Timeline({ events }) {
               <small>· {e.actor} · {fmtDate(e.at)}</small>
             </b>
             {e.type === 'note' && <p>{e.text}</p>}
+            {e.type === 'attachment' && e.attachment && (
+              <p style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span>{fmtSize(e.attachment.size_bytes)}</span>
+                <button className="btn2" onClick={() => download(e.attachment)}>Download</button>
+                {e.attachment.can_delete && onChanged && <button className="danger" onClick={() => remove(e.attachment)}>Remove</button>}
+              </p>
+            )}
           </div>
         </div>
       ))}
@@ -216,7 +252,7 @@ export function Timeline({ events }) {
 
 // ---- pickers -------------------------------------------------------------------------------
 // Pick a person (for assigning) from a list loaded by the caller. Type to search by name, email, team or role.
-const personLabel = (p) => `${p.full_name}${p.team_name ? ` · ${p.team_name}` : ''} (${p.role})`
+const personLabel = (p) => `${p.full_name}${p.team_name ? ` · ${p.team_name}` : ''} (${roleLabel(p.role)})`
 export function PersonSelect({ people, value, onChange, placeholder = 'Choose a person' }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
@@ -228,7 +264,7 @@ export function PersonSelect({ people, value, onChange, placeholder = 'Choose a 
     return () => document.removeEventListener('mousedown', close)
   }, [])
   const term = q.trim().toLowerCase()
-  const shown = people.filter((p) => !term || `${p.full_name} ${p.email || ''} ${p.team_name || ''} ${p.role}`.toLowerCase().includes(term))
+  const shown = people.filter((p) => !term || `${p.full_name} ${p.email || ''} ${p.team_name || ''} ${roleLabel(p.role)}`.toLowerCase().includes(term))
   const pick = (p) => { onChange(p.id); setQ(''); setOpen(false) }
   const onKey = (e) => {
     if (e.key === 'Escape') setOpen(false)
@@ -245,7 +281,7 @@ export function PersonSelect({ people, value, onChange, placeholder = 'Choose a 
       {open && (
         <div className="results">
           {shown.length ? shown.map((p) => (
-            <button key={p.id} type="button" onClick={() => pick(p)}><b>{p.full_name}</b> · {p.email}<br /><small>{p.team_name || 'No team'} · {p.role}</small></button>
+            <button key={p.id} type="button" onClick={() => pick(p)}><b>{p.full_name}</b> · {p.email}<br /><small>{p.team_name || 'No team'} · {roleLabel(p.role)}</small></button>
           )) : <div style={{ padding: '9px 10px', fontSize: 12, color: 'var(--muted)' }}>{people.length ? 'No one matches that search.' : 'No people available to assign.'}</div>}
         </div>
       )}

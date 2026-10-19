@@ -14,6 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
+from ..activity import attachment_events
 from ..db import fetch_all, fetch_one, get_conn
 from ..errors import api_error
 from ..rbac import Principal, can_manage, current_user, require_roles, visibility
@@ -129,7 +130,7 @@ def create_incident(body: IncidentIn, user: Principal = Depends(current_user), c
     """Team, number and SLA deadlines are set by the database. Send `priority` (default P3 Medium)."""
     requester = body.requester_id or user.id
     if requester != user.id and user.role != "admin":
-        raise api_error(403, "forbidden", "Only an administrator can raise an incident for someone else.")
+        raise api_error(403, "forbidden", "Only an Administrator can raise an incident for someone else.")
     impact, urgency = PRIORITY_LEVELS[body.priority] if body.priority else (body.impact or "Medium", body.urgency or "Medium")
     row = fetch_one(
         conn,
@@ -185,9 +186,9 @@ def assign_incident(incident_id: UUID, body: AssignIn, user: Principal = Depends
     target = fetch_one(conn, "select id, role, team_id from profiles where id = %(id)s and status = 'active'",
                        {"id": body.assignee_id})
     if target is None or target["role"] not in ("manager", "admin"):
-        raise api_error(422, "invalid_assignee", "Incidents can only be assigned to an active manager or admin.")
+        raise api_error(422, "invalid_assignee", "Incidents can only be assigned to an active Support Engineer or Administrator.")
     if user.role == "manager" and target["role"] == "manager" and target["team_id"] != user.team_id:
-        raise api_error(422, "invalid_assignee", "You can only assign to your own team's manager or to an admin.")
+        raise api_error(422, "invalid_assignee", "You can only assign to your own team's Support Engineer or to an Administrator.")
     conn.execute(
         """update incidents
               set assignee_id = %(a)s, updated_by = %(uid)s,
@@ -300,5 +301,6 @@ def activity(incident_id: UUID, user: Principal = Depends(current_user), conn=De
     for c in list_comments(incident_id, user, conn):
         events.append({"at": c["created_at"], "type": "note", "actor": c["author_name"], "text": c["body"],
                        "internal": c["internal"]})
+    events += attachment_events(conn, user, "incident", incident_id, inc)
     events.sort(key=lambda e: e["at"], reverse=True)
     return events

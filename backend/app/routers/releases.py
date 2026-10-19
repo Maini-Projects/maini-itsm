@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from ..activity import timeline
+from ..activity import attachment_events, timeline
 from ..db import fetch_all, fetch_one, get_conn
 from ..errors import api_error
 from ..rbac import Principal, can_manage, current_user, require_roles
@@ -97,8 +97,9 @@ def get_release(release_id: UUID, user: Principal = Depends(current_user), conn=
 
 @router.get("/releases/{release_id}/activity")
 def release_activity(release_id: UUID, user: Principal = Depends(current_user), conn=Depends(get_conn)):
-    load(conn, user, release_id)
-    return timeline(conn, "releases", release_id)
+    rel = load(conn, user, release_id)
+    events = timeline(conn, "releases", release_id) + attachment_events(conn, user, "release", release_id, rel)
+    return sorted(events, key=lambda e: e["at"], reverse=True)
 
 
 # ---- create / edit -------------------------------------------------------------------------
@@ -169,7 +170,7 @@ def transition_release(release_id: UUID, body: TransitionIn, user: Principal = D
     if not can_manage(user, rel):
         raise api_error(403, "forbidden", "You can only move releases of your own team.")
     if rel["status"] == "Under Review":
-        raise api_error(409, "awaiting_approval", "This release is waiting for an admin's decision.")
+        raise api_error(409, "awaiting_approval", "This release is waiting for an Administrator's decision.")
     if body.to_status == "Under Review":
         missing = [label for key, label in (("scope", "scope"), ("rollback_plan", "rollback plan"),
                                             ("deployment_at", "deployment date"))

@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import NoteBox from '../components/NoteBox'
 import {
   Empty, ErrorBox, Field, FormModal, Loading, PRIORITIES, Pager, PersonSelect, Priority, RecordPicker, StatusBadge, Text, Timeline,
   Workflow, fmtDate, useAction, useDebounced, useFetch,
+  useTab,
 } from '../components/ui'
 
 const STATUSES = ['Identified', 'Investigating', 'Root Cause Identified', 'Fix Planned', 'Resolved', 'Closed']
@@ -106,7 +108,7 @@ export function ProblemDetail() {
   const prob = useFetch(() => api.get(`/problems/${id}`), [id])
   const activity = useFetch(() => api.get(`/problems/${id}/activity`), [id])
   const assignable = useFetch(() => (prob.data?.can_manage ? api.get('/users/assignable') : []), [id, prob.data?.can_manage])
-  const [tab, setTab] = useState('details')
+  const [tab, setTab] = useTab(['details', 'incidents', 'activity'])
   const [run, busy] = useAction()
   const [owner, setOwner] = useState('')
 
@@ -153,7 +155,12 @@ export function ProblemDetail() {
               )}
             </div>
           )}
-          {tab === 'activity' && <div className="incident-activity"><Timeline events={activity.data} /></div>}
+          {tab === 'activity' && (
+            <div className="incident-activity">
+              <NoteBox kind="problems" id={id} notes={false} onAdded={() => activity.reload()} />
+              <Timeline events={activity.data} onChanged={() => activity.reload()} />
+            </div>
+          )}
         </div>
         <div>
           <div className="side">

@@ -21,7 +21,7 @@ export function DecisionModal({ approvalId, decision, onClose, onDone }) {
   )
 }
 
-// Approval history of a change or release; an admin can decide a pending one right here.
+// Approval history of a change or release; an Administrator can decide a pending one right here.
 export default function ApprovalBox({ approvals, canDecide, onChanged }) {
   const [deciding, setDeciding] = useState(null)
   const [, busy] = useAction()
@@ -44,7 +44,7 @@ export default function ApprovalBox({ approvals, canDecide, onChanged }) {
           <button className="danger" disabled={busy} onClick={() => setDeciding({ id: pending.id, decision: 'rejected' })}>Reject…</button>
         </div>
       )}
-      {pending && !canDecide && <div className="sideactions"><div className="note">Waiting for an admin to decide.</div></div>}
+      {pending && !canDecide && <div className="sideactions"><div className="note">Waiting for an Administrator to decide.</div></div>}
       {deciding && <DecisionModal approvalId={deciding.id} decision={deciding.decision} onClose={() => setDeciding(null)} onDone={() => onChanged()} />}
     </div>
   )

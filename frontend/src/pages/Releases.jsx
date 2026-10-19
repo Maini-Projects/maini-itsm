@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import NoteBox from '../components/NoteBox'
 import ApprovalBox from '../components/ApprovalBox'
 import {
   Empty, ErrorBox, Field, FormModal, Loading, Pager, RecordPicker, RiskBadge, StatusBadge, Text, Timeline, Workflow, fmtDate,
   fmtShort, fromInputDate, toInputDate, useAction, useDebounced, useFetch,
+  useTab,
 } from '../components/ui'
 
 const STATUSES = ['Planned', 'Under Review', 'Approved', 'Ready to Deploy', 'Deployment', 'Validated', 'Closed']
@@ -28,7 +30,7 @@ export function ReleaseList() {
     <>
       <div className="eyebrow">Release Management</div>
       <h2 className="title">Releases</h2>
-      <p className="sub">Plan releases, group changes and track approval, deployment and validation. Managers raise releases; an admin approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
+      <p className="sub">Plan releases, group changes and track approval, deployment and validation. Support Engineers raise releases; an Administrator approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
         <div className="filters">
           <input placeholder="Search releases" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search releases" />
@@ -100,7 +102,7 @@ export function ReleaseDetail() {
   const navigate = useNavigate()
   const rel = useFetch(() => api.get(`/releases/${id}`), [id])
   const activity = useFetch(() => api.get(`/releases/${id}/activity`), [id])
-  const [tab, setTab] = useState('details')
+  const [tab, setTab] = useTab(['details', 'changes', 'activity'])
   const [run, busy] = useAction()
 
   if (rel.loading && !rel.data) return <Loading />
@@ -140,7 +142,12 @@ export function ReleaseDetail() {
               )}
             </div>
           )}
-          {tab === 'activity' && <div className="incident-activity"><Timeline events={activity.data} /></div>}
+          {tab === 'activity' && (
+            <div className="incident-activity">
+              <NoteBox kind="releases" id={id} notes={false} onAdded={() => activity.reload()} />
+              <Timeline events={activity.data} onChanged={() => activity.reload()} />
+            </div>
+          )}
         </div>
         <div>
           <div className="side">
@@ -191,7 +198,7 @@ function ReleaseForm({ r, me, onSaved }) {
       <Field label="Scope" wide>{canEdit ? <textarea value={f.scope} onChange={set('scope')} /> : <Text value={r.scope} />}</Field>
       <Field label="Rollback plan" wide>{canEdit ? <textarea value={f.rollback_plan} onChange={set('rollback_plan')} /> : <Text value={r.rollback_plan} />}</Field>
       {canEdit && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
-      {!canEdit && r.status !== 'Closed' && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>A release can be edited while it is Planned (admins can edit until it is closed).</div>}
+      {!canEdit && r.status !== 'Closed' && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>A release can be edited while it is Planned (Administrators can edit until it is closed).</div>}
     </form>
   )
 }

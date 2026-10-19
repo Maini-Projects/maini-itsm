@@ -1,5 +1,6 @@
 """Activity timeline (created, status, owner, priority changes) built from the audit log."""
 from .db import fetch_all
+from .rbac import Principal, can_manage
 
 SINGULAR = {"problems": "Problem", "changes": "Change", "releases": "Release", "defects": "Defect"}
 
@@ -44,3 +45,21 @@ def timeline(conn, table: str, record_id, owner_key: str | None = None, owner_la
             events.append({"at": r["at"], "type": "severity", "actor": who,
                            "text": f"Severity changed from {r['old_severity']} to {r['new_severity']}"})
     return events
+
+
+def attachment_events(conn, user: Principal, record_type: str, record_id, record: dict) -> list[dict]:
+    """"Attached file" entries for a record's activity timeline (who added which file, and when)."""
+    rows = fetch_all(
+        conn,
+        """select a.id, a.file_name, a.size_bytes, a.uploaded_by, a.created_at, p.full_name as actor_name
+             from attachments a join profiles p on p.id = a.uploaded_by
+            where a.record_type = %(t)s and a.record_id = %(id)s""",
+        {"t": record_type, "id": record_id},
+    )
+    staff = can_manage(user, record)
+    return [
+        {"at": r["created_at"], "type": "attachment", "actor": r["actor_name"], "text": f"Attached {r['file_name']}",
+         "attachment": {"id": r["id"], "file_name": r["file_name"], "size_bytes": r["size_bytes"],
+                        "can_delete": r["uploaded_by"] == user.id or user.role == "admin" or staff}}
+        for r in rows
+    ]

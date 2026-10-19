@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from ..activity import timeline
+from ..activity import attachment_events, timeline
 from ..db import fetch_all, fetch_one, get_conn
 from ..errors import api_error
 from ..rbac import Principal, can_manage, current_user, require_roles, visibility
@@ -179,9 +179,9 @@ def assign_defect(defect_id: UUID, body: AssignIn, user: Principal = Depends(req
     target = fetch_one(conn, "select id, role, team_id from profiles where id = %(id)s and status = 'active'",
                        {"id": body.assignee_id})
     if target is None or target["role"] not in ("manager", "admin"):
-        raise api_error(422, "invalid_assignee", "Defects can only be assigned to an active manager or admin.")
+        raise api_error(422, "invalid_assignee", "Defects can only be assigned to an active Support Engineer or Administrator.")
     if user.role == "manager" and target["role"] == "manager" and target["team_id"] != user.team_id:
-        raise api_error(422, "invalid_assignee", "You can only assign to your own team's manager or to an admin.")
+        raise api_error(422, "invalid_assignee", "You can only assign to your own team's Support Engineer or to an Administrator.")
     conn.execute(
         """update defects
               set assignee_id = %(a)s, updated_by = %(uid)s,
@@ -258,8 +258,9 @@ def add_comment(defect_id: UUID, body: CommentIn, user: Principal = Depends(curr
 @router.get("/defects/{defect_id}/activity")
 def activity(defect_id: UUID, user: Principal = Depends(current_user), conn=Depends(get_conn)):
     """Timeline for the Activity tab: creation, status/assignee/severity changes and notes, newest first."""
-    load(conn, user, defect_id)
+    d = load(conn, user, defect_id)
     events = timeline(conn, "defects", defect_id, owner_key="assignee_id", owner_label="Assigned to")
+    events += attachment_events(conn, user, "defect", defect_id, d)
     for c in list_comments(defect_id, user, conn):
         events.append({"at": c["created_at"], "type": "note", "actor": c["author_name"], "text": c["body"],
                        "internal": c["internal"]})

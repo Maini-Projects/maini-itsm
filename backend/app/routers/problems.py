@@ -10,7 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from ..activity import timeline
+from ..activity import attachment_events, timeline
 from ..db import fetch_all, fetch_one, get_conn
 from ..errors import api_error
 from ..rbac import Principal, can_manage, current_user, require_roles, visibility
@@ -101,8 +101,10 @@ def get_problem(problem_id: UUID, user: Principal = Depends(current_user), conn=
 
 @router.get("/problems/{problem_id}/activity")
 def problem_activity(problem_id: UUID, user: Principal = Depends(current_user), conn=Depends(get_conn)):
-    load(conn, user, problem_id)
-    return timeline(conn, "problems", problem_id, owner_key="owner_id")
+    prob = load(conn, user, problem_id)
+    events = timeline(conn, "problems", problem_id, owner_key="owner_id")
+    events += attachment_events(conn, user, "problem", problem_id, prob)
+    return sorted(events, key=lambda e: e["at"], reverse=True)
 
 
 # ---- create / edit -------------------------------------------------------------------------
@@ -177,9 +179,9 @@ def assign_problem(problem_id: UUID, body: AssignIn, user: Principal = Depends(r
     target = fetch_one(conn, "select id, role, team_id from profiles where id = %(id)s and status = 'active'",
                        {"id": body.owner_id})
     if target is None or target["role"] not in ("manager", "admin"):
-        raise api_error(422, "invalid_assignee", "A problem can only be owned by an active manager or admin.")
+        raise api_error(422, "invalid_assignee", "A problem can only be owned by an active Support Engineer or Administrator.")
     if user.role == "manager" and target["role"] == "manager" and target["team_id"] != user.team_id:
-        raise api_error(422, "invalid_assignee", "You can only assign to your own team's manager or to an admin.")
+        raise api_error(422, "invalid_assignee", "You can only assign to your own team's Support Engineer or to an Administrator.")
     conn.execute("update problems set owner_id = %(o)s, updated_by = %(uid)s where id = %(id)s",
                  {"o": body.owner_id, "uid": user.id, "id": problem_id})
     return _detail(conn, user, problem_id)
