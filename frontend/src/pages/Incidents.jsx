@@ -68,7 +68,7 @@ export function IncidentList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Incident</th><th>Short Description</th><th>Service</th><th>Priority</th><th>Team</th><th>Assignee</th><th>Status</th><th>Open For</th></tr></thead>
+          <thead><tr><th>Incident</th><th>Short Description</th><th>Application</th><th>Priority</th><th>Team</th><th>Assignee</th><th>Status</th><th>Open For</th></tr></thead>
           <tbody>
             {data?.items.map((i) => (
               <tr key={i.id}>
@@ -104,7 +104,7 @@ function NewIncident({ onClose, onCreated }) {
     <FormModal title="New Incident" submitLabel="Create incident" onClose={onClose} onSubmit={submit}>
       <div className="form">
         <Field label="Short description" wide><input value={f.short_description} onChange={set('short_description')} minLength={3} maxLength={200} required autoFocus /></Field>
-        <Field label="Service">
+        <Field label="Application">
           <select value={f.service_id} onChange={set('service_id')}>
             <option value="">Not sure / other</option>
             {(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -203,7 +203,7 @@ export function IncidentDetail() {
           <div className="side">
             <h4>Summary</h4>
             {[['Priority', <Priority key="p" p={i.priority} />], ['Status', <StatusBadge key="st" status={i.status} />],
-              ['Assignee', i.assignee_name || 'Unassigned'], ['Requester', i.requester_name], ['Service', i.service_name || '—'],
+              ['Assignee', i.assignee_name || 'Unassigned'], ['Requester', i.requester_name], ['Application', i.service_name || '—'],
               ['Open for', <OpenFor key="o" inc={i} />], ['Created', fmtDate(i.created_at)],
               ['Team', i.team_name || '—'], ['Resolved', fmtDate(i.resolved_at)]].map(([k, v]) => (
               <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>
@@ -273,7 +273,7 @@ function DetailsForm({ inc, me, onSaved, statusActions, statusBusy, onStatus }) 
   return (
     <form className="form" onSubmit={save}>
       <Field label="Short description" wide>{ro ? <Text value={inc.short_description} /> : <input value={f.short_description} onChange={set('short_description')} minLength={3} required />}</Field>
-      <Field label="Service">{ro ? <Text value={inc.service_name} /> : <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{svc.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}</Field>
+      <Field label="Application">{ro ? <Text value={inc.service_name} /> : <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{svc.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}</Field>
       <Field label="Major incident">{staff && canEdit ? <label className="checkrow"><input type="checkbox" checked={f.major_incident} onChange={set('major_incident')} /> Flag as major incident</label> : <Text value={inc.major_incident ? 'Yes' : 'No'} />}</Field>
       <Field label="Status" hint={statusActions.length === 0 ? (inc.status === 'Closed' ? 'This incident is closed.' : inc.status === 'New' && staff ? 'Assign it to start work.' : 'No status changes are available to you.') : 'Pick the next status to move it on.'}>
         <select value={inc.status} disabled={statusBusy || statusActions.length === 0}

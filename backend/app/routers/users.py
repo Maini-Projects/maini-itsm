@@ -107,3 +107,52 @@ def reset_password(user_id: UUID, body: PasswordReset, _: Principal = Depends(re
         raise api_error(404, "not_found", "User not found.")
     auth_admin.set_password(user_id, body.new_password)
     return {"status": "ok"}
+
+
+# ---- sign-up requests (self sign-up waits here for an Administrator) --------------------------
+
+class ApproveIn(BaseModel):
+    role: Literal["admin", "manager", "employee"] = "employee"
+    team_id: UUID | None = None
+
+
+@router.get("/signup-requests")
+def list_signup_requests(status: Literal["pending", "approved", "rejected"] = "pending",
+                         _: Principal = Depends(require_roles("admin")), conn=Depends(get_conn)):
+    return fetch_all(conn, """select id, email, full_name, status, created_at, decided_at
+                              from signup_requests where status = %(s)s order by created_at""", {"s": status})
+
+
+def _open_request(conn, request_id):
+    row = fetch_one(conn, "select id, email, full_name from signup_requests where id = %(id)s and status = 'pending' for update",
+                    {"id": request_id})
+    if row is None:
+        raise api_error(404, "not_found", "That sign-up request was not found or has already been decided.")
+    return row
+
+
+@router.post("/signup-requests/{request_id}/approve")
+def approve_signup(request_id: UUID, body: ApproveIn, admin: Principal = Depends(require_roles("admin")),
+                   conn=Depends(get_conn)):
+    req = _open_request(conn, request_id)
+    if body.role != "admin" and body.team_id is None:
+        raise api_error(422, "team_required", "Choose a team for Support Engineers and Customers.")
+    conn.execute(
+        """insert into profiles(id, email, full_name, role, team_id)
+           values (%(id)s, %(email)s, %(name)s, %(role)s, %(team)s)""",
+        {"id": req["id"], "email": req["email"], "name": req["full_name"], "role": body.role,
+         "team": body.team_id if body.role != "admin" else None},
+    )
+    conn.execute("update signup_requests set status = 'approved', decided_at = now(), decided_by = %(by)s where id = %(id)s",
+                 {"by": admin.id, "id": request_id})
+    return _get_user(conn, req["id"])
+
+
+@router.post("/signup-requests/{request_id}/reject")
+def reject_signup(request_id: UUID, admin: Principal = Depends(require_roles("admin")), conn=Depends(get_conn),
+                  auth_admin: AuthAdmin = Depends(get_auth_admin)):
+    _open_request(conn, request_id)
+    conn.execute("update signup_requests set status = 'rejected', decided_at = now(), decided_by = %(by)s where id = %(id)s",
+                 {"by": admin.id, "id": request_id})
+    auth_admin.delete_user(request_id)  # frees the email so the person can ask again
+    return {"status": "rejected"}

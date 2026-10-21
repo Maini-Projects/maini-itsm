@@ -88,7 +88,7 @@ def update_service(service_id: str, body: ServicePatch, _: Principal = Depends(r
                           "returning id, name, description, criticality, active, owner_team_id",
                     {**changes, "id": service_id})
     if row is None:
-        raise api_error(404, "not_found", "Service not found.")
+        raise api_error(404, "not_found", "Application not found.")
     return row
 
 

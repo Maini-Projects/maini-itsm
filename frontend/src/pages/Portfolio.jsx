@@ -12,10 +12,10 @@ export function Services() {
   const [edit, setEdit] = useState(null) // null | 'new' | service
   return (
     <>
-      <div className="eyebrow">Projects & Services</div>
-      <h2 className="title">Supported Projects and Services</h2>
-      <p className="sub">Ownership, criticality and live incident counts for each supported service.</p>
-      {me.role === 'admin' && <div className="toolbar"><span /><button className="btn" onClick={() => setEdit('new')}>+ New Service</button></div>}
+      <div className="eyebrow">Applications</div>
+      <h2 className="title">Supported Applications</h2>
+      <p className="sub">Ownership, criticality and live incident counts for each supported application.</p>
+      {me.role === 'admin' && <div className="toolbar"><span /><button className="btn" onClick={() => setEdit('new')}>+ New Application</button></div>}
       <ErrorBox error={error} />
       {loading && !data && <Loading />}
       <div className="reports">
@@ -41,11 +41,11 @@ function ServiceModal({ service, onClose, onSaved }) {
     const body = { ...f, owner_team_id: f.owner_team_id || null, description: f.description || null }
     if (service) await api.patch(`/services/${service.id}`, body)
     else await api.post('/services', body)
-    toast(service ? 'Service updated.' : 'Service created.')
+    toast(service ? 'Application updated.' : 'Application created.')
     onSaved()
   }
   return (
-    <FormModal title={service ? 'Edit service' : 'New service'} onClose={onClose} onSubmit={submit} width={560}>
+    <FormModal title={service ? 'Edit application' : 'New application'} onClose={onClose} onSubmit={submit} width={560}>
       <div className="form">
         <Field label="Name" wide><input value={f.name} onChange={set('name')} required autoFocus /></Field>
         <Field label="Owner team"><select value={f.owner_team_id} onChange={set('owner_team_id')}><option value="">None</option>{(teams.data || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>

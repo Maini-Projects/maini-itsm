@@ -47,7 +47,7 @@ export function DefectList() {
     <>
       <div className="eyebrow">Defect Management</div>
       <h2 className="title">Defects</h2>
-      <p className="sub">Log, assign, track, fix and close defects found in a service.{me.role === 'employee' && ' You see the defects you raised.'}</p>
+      <p className="sub">Log, assign, track, fix and close defects found in an application.{me.role === 'employee' && ' You see the defects you raised.'}</p>
       <div className="toolbar">
         <div className="filters">
           <input placeholder="Search defects" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search defects" />
@@ -72,7 +72,7 @@ export function DefectList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Defect</th><th>Title</th><th>Service</th><th>Severity</th><th>Environment</th><th>Team</th><th>Assignee</th><th>Status</th></tr></thead>
+          <thead><tr><th>Defect</th><th>Title</th><th>Application</th><th>Severity</th><th>Environment</th><th>Team</th><th>Assignee</th><th>Status</th></tr></thead>
           <tbody>
             {data?.items.map((d) => (
               <tr key={d.id}>
@@ -106,7 +106,7 @@ function NewDefect({ onClose, onCreated }) {
     <FormModal title="New Defect" submitLabel="Create defect" onClose={onClose} onSubmit={submit}>
       <div className="form">
         <Field label="Title" wide><input value={f.title} onChange={set('title')} minLength={3} maxLength={200} required autoFocus /></Field>
-        <Field label="Service">
+        <Field label="Application">
           <select value={f.service_id} onChange={set('service_id')}>
             <option value="">Not sure / other</option>
             {(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -199,7 +199,7 @@ export function DefectDetail() {
           <div className="side">
             <h4>Summary</h4>
             {[['Severity', <SeverityBadge key="s" severity={d.severity} />], ['Status', <StatusBadge key="st" status={d.status} />],
-              ['Assignee', d.assignee_name || 'Unassigned'], ['Raised by', d.raised_by_name], ['Service', d.service_name || '—'],
+              ['Assignee', d.assignee_name || 'Unassigned'], ['Raised by', d.raised_by_name], ['Application', d.service_name || '—'],
               ['Environment', d.environment], ['Created', fmtDate(d.created_at)],
               ['Team', d.team_name || '—'], ['Resolved', fmtDate(d.resolved_at)]].map(([k, v]) => (
               <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>
@@ -273,7 +273,7 @@ function DetailsForm({ defect, me, onSaved, statusActions, statusBusy, onStatus 
   return (
     <form className="form" onSubmit={save}>
       <Field label="Title" wide>{ro ? <Text value={defect.title} /> : <input value={f.title} onChange={set('title')} minLength={3} required />}</Field>
-      <Field label="Service">{ro ? <Text value={defect.service_name} /> : <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{svc.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}</Field>
+      <Field label="Application">{ro ? <Text value={defect.service_name} /> : <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{svc.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}</Field>
       <Field label="Environment">{ro ? <Text value={defect.environment} /> : <select value={f.environment} onChange={set('environment')}>{ENVIRONMENTS.map((l) => <option key={l}>{l}</option>)}</select>}</Field>
       <Field label="Status" hint={statusActions.length === 0 ? (defect.status === 'Closed' ? 'This defect is closed.' : defect.status === 'New' && staff ? 'Assign it to start work.' : 'No status changes are available to you.') : 'Pick the next status to move it on.'}>
         <select value={defect.status} disabled={statusBusy || statusActions.length === 0}

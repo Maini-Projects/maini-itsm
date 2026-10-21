@@ -42,7 +42,7 @@ export function ReleaseList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Release</th><th>Name</th><th>Service</th><th>Owner</th><th>Environment</th><th>Status</th><th>Deployment</th></tr></thead>
+          <thead><tr><th>Release</th><th>Name</th><th>Application</th><th>Owner</th><th>Environment</th><th>Status</th><th>Deployment</th></tr></thead>
           <tbody>
             {data?.items.map((r) => (
               <tr key={r.id}>
@@ -75,7 +75,7 @@ function NewRelease({ onClose, onCreated }) {
       <div className="form">
         <Field label="Name" wide><input value={f.name} onChange={set('name')} minLength={3} maxLength={200} required autoFocus /></Field>
         <Field label="Environment"><select value={f.environment} onChange={set('environment')}><option>Production</option><option>UAT</option></select></Field>
-        <Field label="Service"><select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+        <Field label="Application"><select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         <Field label="Deployment date"><input type="datetime-local" value={f.deployment_at} onChange={set('deployment_at')} /></Field>
         <div />
         <Field label="Scope" wide hint="Required before it can be sent for review."><textarea value={f.scope} onChange={set('scope')} /></Field>
@@ -152,7 +152,7 @@ export function ReleaseDetail() {
         <div>
           <div className="side">
             <h4>Summary</h4>
-            {[['Environment', r.environment], ['Service', r.service_name || '—'], ['Team', r.team_name || '—'], ['Owner', r.owner_name],
+            {[['Environment', r.environment], ['Application', r.service_name || '—'], ['Team', r.team_name || '—'], ['Owner', r.owner_name],
               ['Deployment', fmtDate(r.deployment_at)], ['Changes', r.changes.length], ['Created', fmtDate(r.created_at)]].map(([k, v]) => <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>)}
           </div>
           {nextActions(r).length > 0 && (
@@ -192,7 +192,7 @@ function ReleaseForm({ r, me, onSaved }) {
     <form className="form" onSubmit={save}>
       <Field label="Name" wide>{canEdit ? <input value={f.name} onChange={set('name')} minLength={3} required /> : <Text value={r.name} />}</Field>
       <Field label="Environment">{canEdit ? <select value={f.environment} onChange={set('environment')}><option>Production</option><option>UAT</option></select> : <Text value={r.environment} />}</Field>
-      <Field label="Service">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={r.service_name} />}</Field>
+      <Field label="Application">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={r.service_name} />}</Field>
       <Field label="Deployment date">{canEdit ? <input type="datetime-local" value={f.deployment_at} onChange={set('deployment_at')} /> : <Text value={r.deployment_at && fmtDate(r.deployment_at)} />}</Field>
       <div />
       <Field label="Scope" wide>{canEdit ? <textarea value={f.scope} onChange={set('scope')} /> : <Text value={r.scope} />}</Field>

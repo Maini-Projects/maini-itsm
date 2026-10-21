@@ -46,7 +46,7 @@ export function ProblemList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Problem</th><th>Title</th><th>Service</th><th>Priority</th><th>Owner</th><th>Status</th><th>Related Incidents</th></tr></thead>
+          <thead><tr><th>Problem</th><th>Title</th><th>Application</th><th>Priority</th><th>Owner</th><th>Status</th><th>Related Incidents</th></tr></thead>
           <tbody>
             {data?.items.map((p) => (
               <tr key={p.id}>
@@ -82,7 +82,7 @@ function NewProblem({ onClose, onCreated }) {
     <FormModal title="New Problem" submitLabel="Create problem" onClose={onClose} onSubmit={submit}>
       <div className="form">
         <Field label="Title" wide><input value={f.title} onChange={set('title')} minLength={3} maxLength={200} required autoFocus /></Field>
-        <Field label="Service"><select value={f.service_id} onChange={set('service_id')}><option value="">Not sure / other</option>{(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+        <Field label="Application"><select value={f.service_id} onChange={set('service_id')}><option value="">Not sure / other</option>{(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         {me.role !== 'employee' && <Field label="Priority"><select value={f.priority} onChange={set('priority')}><option value="">Default (Medium)</option>{PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>}
         <Field label="Description / business impact" wide><textarea value={f.description} onChange={set('description')} /></Field>
       </div>
@@ -165,7 +165,7 @@ export function ProblemDetail() {
         <div>
           <div className="side">
             <h4>Summary</h4>
-            {[['Service', p.service_name || '—'], ['Team', p.team_name || '—'], ['Raised by', p.raised_by_name], ['Owner', p.owner_name || 'Unassigned'],
+            {[['Application', p.service_name || '—'], ['Team', p.team_name || '—'], ['Raised by', p.raised_by_name], ['Owner', p.owner_name || 'Unassigned'],
               ['Related incidents', p.related_incidents], ['Created', fmtDate(p.created_at)]].map(([k, v]) => <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>)}
           </div>
           {p.can_manage && p.status !== 'Closed' && (
@@ -205,7 +205,7 @@ function ProblemForm({ p, me, onSaved }) {
   return (
     <form className="form" onSubmit={save}>
       <Field label="Title" wide>{canEdit ? <input value={f.title} onChange={set('title')} minLength={3} required /> : <Text value={p.title} />}</Field>
-      <Field label="Service">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={p.service_name} />}</Field>
+      <Field label="Application">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={p.service_name} />}</Field>
       <Field label="Priority">{sEdit ? <select value={f.priority} onChange={set('priority')}>{PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select> : <Priority p={p.priority} />}</Field>
       <Field label="Description / business impact" wide>{canEdit ? <textarea value={f.description} onChange={set('description')} /> : <Text value={p.description} />}</Field>
       <Field label="Root cause" wide>{sEdit ? <textarea value={f.root_cause} onChange={set('root_cause')} /> : <Text value={p.root_cause} />}</Field>

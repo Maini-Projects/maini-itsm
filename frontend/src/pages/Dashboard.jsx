@@ -10,8 +10,8 @@ const sum = (o) => (o ? Object.values(o).reduce((a, b) => a + b, 0) : 0)
 const REQUEST_TYPES = [
   { to: '/incidents', label: 'Incident', hint: 'Something is broken or not working' },
   { to: '/problems', label: 'Problem', hint: 'Find the root cause of repeated incidents' },
-  { to: '/defects', label: 'Defect', hint: 'A bug found in a service' },
-  { to: '/changes', label: 'Change', hint: 'Request a change to a service', staff: true },
+  { to: '/defects', label: 'Defect', hint: 'A bug found in an application' },
+  { to: '/changes', label: 'Change', hint: 'Request a change to an application', staff: true },
   { to: '/releases', label: 'Release', hint: 'Plan a release of changes', staff: true },
 ]
 

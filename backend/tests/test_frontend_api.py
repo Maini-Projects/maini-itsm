@@ -562,3 +562,62 @@ def test_audit_lists_and_filters(client):
     assert client.get(f"{API}/audit", params={"table": "audit_log"}, headers=h).status_code == 422
     users = client.get(f"{API}/audit", params={"table": "profiles"}, headers=h).json()
     assert users["items"] and users["items"][0]["record"].endswith("@test.local")
+
+
+# ---- self sign-up and approval ----------------------------------------------------------------
+
+ADMIN = {"Authorization": "Bearer t-admin"}
+
+
+def _signup(client, email="new.person@example.com", **kw):
+    return client.post(f"{API}/auth/register", json={"email": email, "full_name": "New Person", "password": "longenough1", **kw})
+
+
+def test_signup_waits_for_approval_then_creates_the_profile(client):
+    assert _signup(client).status_code == 201
+    assert client.get(f"{API}/dashboard/summary", headers=ADMIN).json()["pending_signups"] == 1
+    reqs = client.get(f"{API}/signup-requests", headers=ADMIN).json()
+    assert [r["email"] for r in reqs] == ["new.person@example.com"]
+    assert not any(u["email"] == "new.person@example.com" for u in client.get(f"{API}/users", headers=ADMIN).json())
+    # a customer cannot see or decide requests
+    assert client.get(f"{API}/signup-requests", headers={"Authorization": "Bearer t-devemp"}).status_code == 403
+    team = client.get(f"{API}/teams", headers=ADMIN).json()[0]["id"]
+    assert client.post(f"{API}/signup-requests/{reqs[0]['id']}/approve", headers=ADMIN, json={}).status_code == 422  # team needed
+    r = client.post(f"{API}/signup-requests/{reqs[0]['id']}/approve", headers=ADMIN, json={"team_id": team})
+    assert r.status_code == 200 and r.json()["role"] == "employee" and r.json()["team_id"] == team
+    assert client.get(f"{API}/signup-requests", headers=ADMIN).json() == []
+    assert client.post(f"{API}/signup-requests/{reqs[0]['id']}/approve", headers=ADMIN, json={"team_id": team}).status_code == 404
+
+
+def test_signup_can_be_rejected_and_repeated(client):
+    assert _signup(client, "no@example.com").status_code == 201
+    assert _signup(client, "no@example.com").status_code == 409                       # already waiting
+    rid = client.get(f"{API}/signup-requests", headers=ADMIN).json()[0]["id"]
+    assert client.post(f"{API}/signup-requests/{rid}/reject", headers=ADMIN).status_code == 200
+    assert client.app.state.fake_auth_admin.deleted                                      # the login was removed
+    assert client.get(f"{API}/signup-requests", headers=ADMIN).json() == []
+    assert len(client.get(f"{API}/signup-requests?status=rejected", headers=ADMIN).json()) == 1
+    assert _signup(client, "no@example.com").status_code == 201                       # may ask again
+
+
+def test_signup_validation_and_existing_email(client):
+    assert _signup(client, "devmgr@test.local").status_code == 422                    # not a valid address
+    assert _signup(client, "short@example.com", password="short").status_code == 422
+    assert _signup(client, "x@example.com", role="admin").status_code == 201
+    team = client.get(f"{API}/teams", headers=ADMIN).json()[0]["id"]
+    rid = client.get(f"{API}/signup-requests", headers=ADMIN).json()[0]["id"]
+    assert client.post(f"{API}/signup-requests/{rid}/approve", headers=ADMIN, json={"team_id": team}).json()["role"] == "employee"
+
+
+def test_login_explains_a_pending_request(client, app):
+    from app.auth import get_auth_client
+    class Pass:  # a Supabase login that accepts the password
+        def login(self, e, p): return {"access_token": "x", "refresh_token": "y", "expires_in": 1, "token_type": "bearer"}
+    assert _signup(client, "wait@example.com").status_code == 201
+    old = app.dependency_overrides[get_auth_client]
+    app.dependency_overrides[get_auth_client] = lambda: Pass()
+    try:
+        r = client.post(f"{API}/auth/login", json={"email": "Wait@example.com", "password": "longenough1"})
+    finally:
+        app.dependency_overrides[get_auth_client] = old
+    assert r.status_code == 403 and r.json()["error"]["code"] == "account_pending"

@@ -59,7 +59,10 @@ def summary(user: Principal = Depends(current_user), conn=Depends(get_conn)):
     )
 
     result = {"incidents": incidents, "defects": defects, "sla_performance": sla_performance, "team_workload": [],
-              "pending_approvals": None, "problems": None, "changes": None, "releases": None}
+              "pending_approvals": None, "problems": None, "changes": None, "releases": None,
+              "pending_signups": None}
+    if user.role == "admin":
+        result["pending_signups"] = fetch_one(conn, "select count(*) as n from signup_requests where status = 'pending'")["n"]
     if not staff:
         return result
 

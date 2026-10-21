@@ -6,7 +6,7 @@ import { Field, FormModal, roleLabel, useToast } from './ui'
 
 const SECTIONS = [
   { title: 'Service Management', items: [['incidents', 'Incidents'], ['problems', 'Problems'], ['defects', 'Defects'], ['changes', 'Changes'], ['releases', 'Releases']] },
-  { title: 'Service Portfolio', items: [['services', 'Projects & Services']] },
+  { title: 'Application Portfolio', items: [['services', 'Applications']] },
   { title: 'Governance & Operations', items: [['approvals', 'Approvals'], ['sla', 'SLA Management'], ['reports', 'Reports'], ['audit', 'Audit History']] },
   { title: 'Administration', items: [['admin', 'Admin']] },
 ]
@@ -19,6 +19,7 @@ function sidebarCount(key, c) {
   if (key === 'changes') return c.changes?.active
   if (key === 'releases') return c.releases?.upcoming_14_days
   if (key === 'approvals') return c.pending_approvals?.total
+  if (key === 'admin') return c.pending_signups || null
   return null
 }
 

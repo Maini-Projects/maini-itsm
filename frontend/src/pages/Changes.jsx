@@ -46,7 +46,7 @@ export function ChangeList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Change</th><th>Title</th><th>Type</th><th>Service</th><th>Requester</th><th>Risk</th><th>Status</th><th>Planned Start</th></tr></thead>
+          <thead><tr><th>Change</th><th>Title</th><th>Type</th><th>Application</th><th>Requester</th><th>Risk</th><th>Status</th><th>Planned Start</th></tr></thead>
           <tbody>
             {data?.items.map((c) => (
               <tr key={c.id}>
@@ -81,7 +81,7 @@ function NewChange({ onClose, onCreated }) {
         <Field label="Title" wide><input value={f.title} onChange={set('title')} minLength={3} maxLength={200} required autoFocus /></Field>
         <Field label="Type"><select value={f.type} onChange={set('type')}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
         <Field label="Risk"><select value={f.risk} onChange={set('risk')}>{LEVELS.map((t) => <option key={t}>{t}</option>)}</select></Field>
-        <Field label="Service"><select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+        <Field label="Application"><select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         <div />
         <Field label="Planned start"><input type="datetime-local" value={f.planned_start} onChange={set('planned_start')} /></Field>
         <Field label="Planned end"><input type="datetime-local" value={f.planned_end} onChange={set('planned_end')} /></Field>
@@ -145,7 +145,7 @@ export function ChangeDetail() {
         <div>
           <div className="side">
             <h4>Summary</h4>
-            {[['Type', c.type], ['Risk', c.risk], ['Service', c.service_name || '—'], ['Team', c.team_name || '—'], ['Requester', c.requester_name],
+            {[['Type', c.type], ['Risk', c.risk], ['Application', c.service_name || '—'], ['Team', c.team_name || '—'], ['Requester', c.requester_name],
               ['Planned start', fmtDate(c.planned_start)], ['Planned end', fmtDate(c.planned_end)], ['Created', fmtDate(c.created_at)]].map(([k, v]) => <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>)}
             {c.releases.length > 0 && <div className="sr"><label>In releases</label><b>{c.releases.map((r) => <div key={r.id}><Link className="link" to={`/releases/${r.id}`}>{r.number}</Link> {r.name}</div>)}</b></div>}
           </div>
@@ -187,7 +187,7 @@ function ChangeForm({ c, me, onSaved }) {
       <Field label="Title" wide>{canEdit ? <input value={f.title} onChange={set('title')} minLength={3} required /> : <Text value={c.title} />}</Field>
       <Field label="Type">{canEdit ? <select value={f.type} onChange={set('type')}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select> : <Text value={c.type} />}</Field>
       <Field label="Risk">{canEdit ? <select value={f.risk} onChange={set('risk')}>{LEVELS.map((t) => <option key={t}>{t}</option>)}</select> : <Text value={c.risk} />}</Field>
-      <Field label="Service">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={c.service_name} />}</Field>
+      <Field label="Application">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={c.service_name} />}</Field>
       <div />
       <Field label="Planned start">{canEdit ? <input type="datetime-local" value={f.planned_start} onChange={set('planned_start')} /> : <Text value={c.planned_start && fmtDate(c.planned_start)} />}</Field>
       <Field label="Planned end">{canEdit ? <input type="datetime-local" value={f.planned_end} onChange={set('planned_end')} /> : <Text value={c.planned_end && fmtDate(c.planned_end)} />}</Field>

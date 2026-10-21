@@ -14,7 +14,7 @@ backend/               FastAPI service (deployed on Render)
   app/routers/           auth, reference (me, teams, services, SLA), users, incidents, problems, defects,
                          changes, releases, approvals, dashboard, reports, audit
   app/rbac.py            who may see what; app/auth.py login; app/errors.py error format
-  tests/                 103 automated tests
+  tests/                 107 automated tests
 frontend/              React + Vite web app (talks only to the back end's REST API)
 render.yaml            Render Blueprint for the back end
 ```
@@ -85,6 +85,13 @@ npm run build               # production build into frontend/dist
 The back end's `CORS_ORIGINS` must include the address the app runs on (default allows
 `http://localhost:5173` and `http://127.0.0.1:5173`).
 
+## Self sign-up
+
+The sign-in page has a **Create an account** link. The form asks for name, email and password only. The new login cannot use the
+portal until an Administrator opens **Admin**, finds it under *Sign-up requests waiting for approval* (the sidebar shows a count),
+and approves it by choosing a role and team, or rejects it (which removes the login). Until then, signing in says the request is
+waiting for approval. Needs migration 006.
+
 ## File attachments
 
 Files are attached in the **Activity** tab of every incident, problem, defect, change and release: incidents and defects
@@ -102,7 +109,7 @@ changed with `ATTACHMENTS_BUCKET` (default `attachments`).
 ## Set up the database (Supabase)
 
 1. SQL editor: run `supabase/migrations/001_foundation_schema.sql`, then `002_clear_resolved_at_on_reopen.sql`,
-   then `003_remove_incident_approval.sql`, `004_defects.sql` and `005_attachments.sql`
+   then `003_remove_incident_approval.sql`, `004_defects.sql`, `005_attachments.sql` and `006_signup_requests.sql`
    (005 also creates the private `attachments` Storage bucket, 1 MB per file).
 2. Authentication > Users > Add user (auto-confirm), then give that login a profile:
    ```sql
@@ -137,10 +144,10 @@ user-creation calls (tested against a pretend Supabase only), and the Render dep
 
 | Area | Endpoints |
 |---|---|
-| Sign in | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/password` (change own) |
+| Sign in / up | `POST /auth/login`, `POST /auth/register` (self sign-up, waits for approval), `POST /auth/refresh`, `POST /auth/password` (change own) |
 | Session | `GET /me` (role, team, menu to show) |
 | Reference | `GET /teams`, `GET/POST/PATCH /services`, `GET/PUT /sla` |
-| Users (admin) | `GET/POST /users`, `PATCH /users/{id}`, `POST /users/{id}/password`, `GET /users/assignable` |
+| Users (admin) | `GET /signup-requests`, `POST /signup-requests/{id}/approve` and `/reject`, `GET/POST /users`, `PATCH /users/{id}`, `POST /users/{id}/password`, `GET /users/assignable` |
 | Incidents | `GET/POST /incidents`, `GET/PATCH /incidents/{id}`, `POST .../assign`, `POST .../transition`, `GET/POST .../comments`, `GET .../activity` |
 | Problems | `GET/POST /problems`, `GET/PATCH /problems/{id}`, `POST .../assign`, `POST .../transition`, `POST .../incidents`, `DELETE .../incidents/{incident_id}`, `GET .../activity` |
 | Defects | `GET/POST /defects`, `GET/PATCH /defects/{id}`, `POST .../assign`, `POST .../transition`, `GET/POST .../comments`, `GET .../activity` |

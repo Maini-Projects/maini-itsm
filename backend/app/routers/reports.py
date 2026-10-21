@@ -51,7 +51,7 @@ def open_incidents(conn, user):
            i.created_at""",
         "i.priority, i.resolution_due")
     cols = [col("number", "Incident"), col("short_description", "Description"), col("priority", "Priority"),
-            col("status", "Status"), col("service_name", "Service"), col("team_name", "Team"),
+            col("status", "Status"), col("service_name", "Application"), col("team_name", "Team"),
             col("assignee_name", "Assignee"), col("resolution_due_at", "Resolution due"), col("created_at", "Created")]
     return cols, rows, None
 
@@ -80,9 +80,9 @@ def by_priority(conn, user):
 def by_service(conn, user):
     rows = _grouped(conn, user, "coalesce(s.name, 'No service')", "service_name")
     rows.sort(key=lambda r: (-r["total"], r["service_name"]))
-    cols = [col("service_name", "Service"), col("total", "Incidents"), col("open_count", "Open"),
+    cols = [col("service_name", "Application"), col("total", "Incidents"), col("open_count", "Open"),
             col("breached", "Open and past SLA")]
-    return cols, rows, {"label": "Incidents by service", "labels": [r["service_name"] for r in rows],
+    return cols, rows, {"label": "Incidents by application", "labels": [r["service_name"] for r in rows],
                         "values": [r["total"] for r in rows]}
 
 
@@ -111,7 +111,7 @@ def open_problems(conn, user):
              limit {ROW_LIMIT}""",
         vp)
     cols = [col("number", "Problem"), col("title", "Title"), col("priority", "Priority"), col("status", "Status"),
-            col("service_name", "Service"), col("owner_name", "Owner"), col("created_at", "Created")]
+            col("service_name", "Application"), col("owner_name", "Owner"), col("created_at", "Created")]
     return cols, rows, None
 
 
@@ -128,7 +128,7 @@ def open_defects(conn, user):
              limit {ROW_LIMIT}""",
         vp)
     cols = [col("number", "Defect"), col("title", "Title"), col("severity", "Severity"),
-            col("environment", "Environment"), col("status", "Status"), col("service_name", "Service"),
+            col("environment", "Environment"), col("status", "Status"), col("service_name", "Application"),
             col("team_name", "Team"), col("assignee_name", "Assignee"), col("created_at", "Created")]
     return cols, rows, None
 
@@ -174,7 +174,7 @@ def upcoming_releases(conn, user):
              limit {ROW_LIMIT}""",
         vp)
     cols = [col("number", "Release"), col("name", "Name"), col("environment", "Environment"),
-            col("status", "Status"), col("service_name", "Service"), col("owner_name", "Owner"),
+            col("status", "Status"), col("service_name", "Application"), col("owner_name", "Owner"),
             col("deployment_at", "Deployment")]
     return cols, rows, None
 
@@ -199,7 +199,7 @@ def pending_approvals(conn, user):
 REPORTS: dict[str, tuple[str, str, Callable]] = {
     "open_incidents": ("Open incidents", "Incidents", open_incidents),
     "incidents_by_priority": ("Incidents by priority", "Incidents", by_priority),
-    "incidents_by_service": ("Incidents by service", "Incidents", by_service),
+    "incidents_by_service": ("Incidents by application", "Incidents", by_service),
     "sla_breaches": ("Open incidents past their SLA", "SLA", sla_breaches),
     "open_problems": ("Open problems", "Problems", open_problems),
     "open_defects": ("Open defects", "Defects", open_defects),
