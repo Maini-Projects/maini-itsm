@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { api } from '../api'
 import { useAuth } from '../auth'
 import { Field, FormModal, roleLabel, useToast } from './ui'
+import PasswordInput from './PasswordInput'
 
 const SECTIONS = [
   { title: 'Service Management', items: [['incidents', 'Incidents'], ['problems', 'Problems'], ['defects', 'Defects'], ['changes', 'Changes'], ['releases', 'Releases']] },
@@ -22,9 +23,9 @@ function ChangePassword({ onClose }) {
   return (
     <FormModal title="Change password" submitLabel="Change password" onClose={onClose} onSubmit={submit} width={460}>
       <div className="form" style={{ gridTemplateColumns: '1fr' }}>
-        <Field label="Current password"><input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></Field>
-        <Field label="New password" hint="At least 8 characters."><input type="password" value={next} onChange={(e) => setNext(e.target.value)} minLength={8} autoComplete="new-password" required /></Field>
-        <Field label="Repeat new password"><input type="password" value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" required /></Field>
+        <Field label="Current password"><PasswordInput value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></Field>
+        <Field label="New password" hint="At least 8 characters."><PasswordInput value={next} onChange={(e) => setNext(e.target.value)} minLength={8} autoComplete="new-password" required /></Field>
+        <Field label="Repeat new password"><PasswordInput value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" required /></Field>
       </div>
     </FormModal>
   )

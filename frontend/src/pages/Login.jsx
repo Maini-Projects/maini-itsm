@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../auth'
 import { api } from '../api'
+import PasswordInput from '../components/PasswordInput'
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -63,12 +64,12 @@ export default function Login() {
         </div>
         <div className="field">
           <label htmlFor="password">Password</label>
-          <input id="password" type="password" value={form.password} onChange={set('password')} autoComplete={signup ? 'new-password' : 'current-password'} minLength={signup ? 8 : undefined} maxLength={72} required />
+          <PasswordInput id="password" value={form.password} onChange={set('password')} autoComplete={signup ? 'new-password' : 'current-password'} minLength={signup ? 8 : undefined} maxLength={72} required />
         </div>
         {signup && (
           <div className="field">
             <label htmlFor="confirm">Confirm password</label>
-            <input id="confirm" type="password" value={form.confirm} onChange={set('confirm')} autoComplete="new-password" maxLength={72} required />
+            <PasswordInput id="confirm" value={form.confirm} onChange={set('confirm')} autoComplete="new-password" maxLength={72} required />
           </div>
         )}
         <button className="btn" type="submit" disabled={busy}>
