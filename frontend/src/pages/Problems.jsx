@@ -4,10 +4,11 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 import NoteBox from '../components/NoteBox'
 import {
-  Empty, ErrorBox, Field, FormModal, Loading, PRIORITIES, Pager, PersonSelect, Priority, RecordPicker, StatusBadge, Text, Timeline,
+  DetailTitle, FieldBar, statusField, Empty, ErrorBox, Field, FormModal, Loading, PRIORITIES, Pager, PersonSelect, Priority, RecordPicker, StatusBadge, Text, Timeline,
   Workflow, fmtDate, useAction, useDebounced, useFetch,
   useTab,
 } from '../components/ui'
+import CountPill from '../components/CountPill'
 
 const STATUSES = ['Identified', 'Investigating', 'Root Cause Identified', 'Fix Planned', 'Resolved', 'Closed']
 const LIMIT = 25
@@ -31,7 +32,7 @@ export function ProblemList() {
   )
   return (
     <>
-      <div className="eyebrow">Problem Management</div>
+      <div className="eyebrow">Problem Management <CountPill of="problems" /></div>
       <h2 className="title">Problems & Known Errors</h2>
       <p className="sub">Investigate recurring incidents, root causes, workarounds and permanent fixes.{me.role === 'employee' && ' You see the problems you raised.'}</p>
       <div className="toolbar">
@@ -123,8 +124,8 @@ export function ProblemDetail() {
   return (
     <>
       <button className="back" onClick={() => navigate('/problems')}>‹ Back to problems</button>
-      <div className="dtitle"><h2>{p.number}</h2><StatusBadge status={p.status} /><Priority p={p.priority} /></div>
-      <p className="sub">{p.title}</p>
+      <DetailTitle number={p.number} title={p.title} status={p.status} />
+      <ProblemBar p={p} me={me} people={assignable.data || []} run={run} busy={busy} onDone={refresh} onStatus={(a) => move(a.to)} />
       <Workflow steps={STATUSES} current={p.status} />
       <div className="detail">
         <div className="card">
@@ -163,19 +164,13 @@ export function ProblemDetail() {
           )}
         </div>
         <div>
-          <div className="side">
-            <h4>Summary</h4>
-            {[['Application', p.service_name || '—'], ['Team', p.team_name || '—'], ['Raised by', p.raised_by_name], ['Owner', p.owner_name || 'Unassigned'],
-              ['Related incidents', p.related_incidents], ['Created', fmtDate(p.created_at)]].map(([k, v]) => <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>)}
-          </div>
           {p.can_manage && p.status !== 'Closed' && (
             <div className="side">
               <h4>Actions</h4>
               <div className="sideactions">
                 <PersonSelect people={assignable.data || []} value={owner} onChange={setOwner} placeholder={p.owner_name ? `Change owner (now ${p.owner_name})` : 'Assign an owner…'} />
                 <button className="btn2" disabled={!owner || busy} onClick={() => run(async () => { await api.post(`/problems/${id}/assign`, { owner_id: owner }); setOwner(''); refresh() }, 'Owner updated.')}>Set owner</button>
-                {nextActions(p).map((a) => <button key={a.label} className={a.primary ? 'btn' : 'btn2'} disabled={busy} onClick={() => move(a.to)}>{a.label}</button>)}
-                {p.status === 'Investigating' && !p.root_cause && <div className="note">Fill in the root cause (Details tab) before marking it identified.</div>}
+                {p.status === 'Investigating' && !p.root_cause && <div className="note">Fill in the root cause (Details tab) before moving it to Root Cause Identified.</div>}
               </div>
             </div>
           )}
@@ -186,10 +181,9 @@ export function ProblemDetail() {
 }
 
 function ProblemForm({ p, me, onSaved }) {
-  const services = useFetch(() => api.get('/services'))
   const staff = p.can_manage
   const canEdit = p.status !== 'Closed' && (staff || (p.raised_by === me.id && p.status === 'Identified'))
-  const initial = () => ({ title: p.title, description: p.description || '', service_id: p.service_id || '', priority: p.priority, root_cause: p.root_cause || '', workaround: p.workaround || '', permanent_solution: p.permanent_solution || '' })
+  const initial = () => ({ root_cause: p.root_cause || '', workaround: p.workaround || '', permanent_solution: p.permanent_solution || '' })
   const [f, setF] = useState(initial)
   const [run, busy] = useAction()
   useEffect(() => setF(initial()), [p.updated_at]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -197,21 +191,43 @@ function ProblemForm({ p, me, onSaved }) {
   const save = (e) => {
     e.preventDefault()
     const init = initial(), changes = {}
-    Object.keys(f).forEach((k) => { if (f[k] !== init[k]) changes[k] = k === 'service_id' ? f[k] || null : f[k] })
+    Object.keys(f).forEach((k) => { if (f[k] !== init[k]) changes[k] = f[k] })
     if (!Object.keys(changes).length) return
     run(async () => { await api.patch(`/problems/${p.id}`, changes); onSaved() }, 'Problem updated.')
   }
   const sEdit = staff && canEdit
   return (
     <form className="form" onSubmit={save}>
-      <Field label="Title" wide>{canEdit ? <input value={f.title} onChange={set('title')} minLength={3} required /> : <Text value={p.title} />}</Field>
-      <Field label="Application">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={p.service_name} />}</Field>
-      <Field label="Priority">{sEdit ? <select value={f.priority} onChange={set('priority')}>{PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select> : <Priority p={p.priority} />}</Field>
-      <Field label="Description / business impact" wide>{canEdit ? <textarea value={f.description} onChange={set('description')} /> : <Text value={p.description} />}</Field>
+      <Field label="Title" wide><Text value={p.title} /></Field>
+      <Field label="Description / business impact" wide><Text value={p.description} /></Field>
       <Field label="Root cause" wide>{sEdit ? <textarea value={f.root_cause} onChange={set('root_cause')} /> : <Text value={p.root_cause} />}</Field>
       <Field label="Workaround" wide>{sEdit ? <textarea value={f.workaround} onChange={set('workaround')} /> : <Text value={p.workaround} />}</Field>
       <Field label="Permanent solution" wide>{sEdit ? <textarea value={f.permanent_solution} onChange={set('permanent_solution')} /> : <Text value={p.permanent_solution} />}</Field>
-      {canEdit && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
+      <Field label="Related incidents"><Text value={String(p.related_incidents)} /></Field>
+      <Field label="Created"><Text value={fmtDate(p.created_at)} /></Field>
+      {sEdit && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
     </form>
   )
+}
+
+// Application, raised by, owner, priority and status as dropdowns across the top of the problem.
+function ProblemBar({ p, me, people, run, busy, onDone, onStatus }) {
+  const services = useFetch(() => api.get('/services'))
+  const staff = p.can_manage
+  const canEdit = p.status !== 'Closed' && (staff || (p.raised_by === me.id && p.status === 'Identified'))
+  const patch = (changes, ok) => run(async () => { await api.patch(`/problems/${p.id}`, changes); onDone() }, ok)
+  const setOwner = (owner_id) => run(async () => { await api.post(`/problems/${p.id}/assign`, { owner_id }); onDone() }, 'Owner updated.')
+  const apps = (services.data || []).filter((a) => a.active || a.id === p.service_id)
+  return <FieldBar fields={[
+    { label: 'Application', value: p.service_id || '', locked: !canEdit, disabled: busy, onChange: (v) => patch({ service_id: v || null }, 'Application updated.'),
+      options: [{ value: '', label: 'None' }, ...apps.map((a) => ({ value: a.id, label: a.name }))] },
+    { label: 'Raised by', text: p.raised_by_name },
+    { label: 'Owner', value: p.owner_id || '', locked: !(staff && p.status !== 'Closed'), disabled: busy, onChange: (v) => v && setOwner(v),
+      options: [...(p.owner_id ? [] : [{ value: '', label: 'Unassigned' }]),
+        ...(p.owner_id && !people.some((x) => x.id === p.owner_id) ? [{ value: p.owner_id, label: p.owner_name }] : []),
+        ...people.map((x) => ({ value: x.id, label: x.full_name }))] },
+    { label: 'Priority', value: p.priority, locked: !(staff && canEdit), disabled: busy, onChange: (v) => patch({ priority: v }, 'Priority updated.'),
+      options: PRIORITIES.map(([v, l]) => ({ value: v, label: l })) },
+    statusField({ status: p.status, actions: nextActions(p), busy, onPick: onStatus, none: p.status === 'Closed' ? 'This problem is closed.' : 'No status changes are available to you.' }),
+  ]} />
 }

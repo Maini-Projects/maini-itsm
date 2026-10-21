@@ -5,10 +5,11 @@ import { useAuth } from '../auth'
 import NoteBox from '../components/NoteBox'
 import ApprovalBox from '../components/ApprovalBox'
 import {
-  Empty, ErrorBox, Field, FormModal, Loading, Pager, RecordPicker, RiskBadge, StatusBadge, Text, Timeline, Workflow, fmtDate,
+  DetailTitle, FieldBar, statusField, Empty, ErrorBox, Field, FormModal, Loading, Pager, RecordPicker, RiskBadge, StatusBadge, Text, Timeline, Workflow, fmtDate,
   fmtShort, fromInputDate, toInputDate, useAction, useDebounced, useFetch,
   useTab,
 } from '../components/ui'
+import CountPill from '../components/CountPill'
 
 const STATUSES = ['Planned', 'Under Review', 'Approved', 'Ready to Deploy', 'Deployment', 'Validated', 'Closed']
 const LIMIT = 25
@@ -28,7 +29,7 @@ export function ReleaseList() {
   const { data, error, loading } = useFetch(() => api.get('/releases', { q: dq.trim(), environment, status, limit: LIMIT, offset }), [dq, environment, status, offset])
   return (
     <>
-      <div className="eyebrow">Release Management</div>
+      <div className="eyebrow">Release Management <CountPill of="releases" /></div>
       <h2 className="title">Releases</h2>
       <p className="sub">Plan releases, group changes and track approval, deployment and validation. Support Engineers raise releases; an Administrator approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
@@ -117,8 +118,8 @@ export function ReleaseDetail() {
   return (
     <>
       <button className="back" onClick={() => navigate('/releases')}>‹ Back to releases</button>
-      <div className="dtitle"><h2>{r.number}</h2><StatusBadge status={r.status} /></div>
-      <p className="sub">{r.name}</p>
+      <DetailTitle number={r.number} title={r.name} status={r.status} />
+      <ReleaseBar r={r} me={me} run={run} busy={busy} onDone={refresh} onStatus={(a) => move(a.to)} />
       <Workflow steps={STATUSES} current={r.status} />
       <div className="detail">
         <div className="card">
@@ -150,17 +151,9 @@ export function ReleaseDetail() {
           )}
         </div>
         <div>
-          <div className="side">
-            <h4>Summary</h4>
-            {[['Environment', r.environment], ['Application', r.service_name || '—'], ['Team', r.team_name || '—'], ['Owner', r.owner_name],
-              ['Deployment', fmtDate(r.deployment_at)], ['Changes', r.changes.length], ['Created', fmtDate(r.created_at)]].map(([k, v]) => <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>)}
-          </div>
-          {nextActions(r).length > 0 && (
+          {r.status === 'Planned' && r.can_manage && (
             <div className="side"><h4>Actions</h4>
-              <div className="sideactions">
-                {nextActions(r).map((a) => <button key={a.label} className="btn" disabled={busy} onClick={() => move(a.to)}>{a.label}</button>)}
-                {r.status === 'Planned' && <div className="note">Needs scope, rollback plan and deployment date before review.</div>}
-              </div>
+              <div className="sideactions"><div className="note">Needs scope, rollback plan and deployment date before review.</div></div>
             </div>
           )}
           <ApprovalBox approvals={r.approvals} canDecide={me.role === 'admin'} onChanged={refresh} />
@@ -171,9 +164,8 @@ export function ReleaseDetail() {
 }
 
 function ReleaseForm({ r, me, onSaved }) {
-  const services = useFetch(() => api.get('/services'))
   const canEdit = r.can_manage && r.status !== 'Closed' && (r.status === 'Planned' || me.role === 'admin')
-  const initial = () => ({ name: r.name, environment: r.environment, service_id: r.service_id || '', scope: r.scope || '', rollback_plan: r.rollback_plan || '', deployment_at: toInputDate(r.deployment_at) })
+  const initial = () => ({ scope: r.scope || '', rollback_plan: r.rollback_plan || '', deployment_at: toInputDate(r.deployment_at) })
   const [f, setF] = useState(initial)
   const [run, busy] = useAction()
   useEffect(() => setF(initial()), [r.updated_at]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -183,22 +175,35 @@ function ReleaseForm({ r, me, onSaved }) {
     const init = initial(), changes = {}
     Object.keys(f).forEach((k) => {
       if (f[k] === init[k]) return
-      changes[k] = k === 'service_id' ? f[k] || null : k === 'deployment_at' ? fromInputDate(f[k]) : f[k]
+      changes[k] = k === 'deployment_at' ? fromInputDate(f[k]) : f[k]
     })
     if (!Object.keys(changes).length) return
     run(async () => { await api.patch(`/releases/${r.id}`, changes); onSaved() }, 'Release updated.')
   }
   return (
     <form className="form" onSubmit={save}>
-      <Field label="Name" wide>{canEdit ? <input value={f.name} onChange={set('name')} minLength={3} required /> : <Text value={r.name} />}</Field>
-      <Field label="Environment">{canEdit ? <select value={f.environment} onChange={set('environment')}><option>Production</option><option>UAT</option></select> : <Text value={r.environment} />}</Field>
-      <Field label="Application">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={r.service_name} />}</Field>
+      <Field label="Name" wide><Text value={r.name} /></Field>
       <Field label="Deployment date">{canEdit ? <input type="datetime-local" value={f.deployment_at} onChange={set('deployment_at')} /> : <Text value={r.deployment_at && fmtDate(r.deployment_at)} />}</Field>
-      <div />
+      <Field label="Created"><Text value={fmtDate(r.created_at)} /></Field>
       <Field label="Scope" wide>{canEdit ? <textarea value={f.scope} onChange={set('scope')} /> : <Text value={r.scope} />}</Field>
       <Field label="Rollback plan" wide>{canEdit ? <textarea value={f.rollback_plan} onChange={set('rollback_plan')} /> : <Text value={r.rollback_plan} />}</Field>
       {canEdit && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
-      {!canEdit && r.status !== 'Closed' && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>A release can be edited while it is Planned (Administrators can edit until it is closed).</div>}
     </form>
   )
+}
+
+// Application, owner, environment and status as dropdowns across the top of the release.
+function ReleaseBar({ r, me, run, busy, onDone, onStatus }) {
+  const services = useFetch(() => api.get('/services'))
+  const canEdit = r.can_manage && r.status !== 'Closed' && (r.status === 'Planned' || me.role === 'admin')
+  const patch = (changes, ok) => run(async () => { await api.patch(`/releases/${r.id}`, changes); onDone() }, ok)
+  const apps = (services.data || []).filter((a) => a.active || a.id === r.service_id)
+  return <FieldBar fields={[
+    { label: 'Application', value: r.service_id || '', locked: !canEdit, disabled: busy, onChange: (v) => patch({ service_id: v || null }, 'Application updated.'),
+      options: [{ value: '', label: 'None' }, ...apps.map((a) => ({ value: a.id, label: a.name }))] },
+    { label: 'Owner', text: r.owner_name },
+    { label: 'Environment', value: r.environment, locked: !canEdit, disabled: busy, onChange: (v) => patch({ environment: v }, 'Environment updated.'),
+      options: ['Production', 'UAT'].map((e) => ({ value: e, label: e })) },
+    statusField({ status: r.status, actions: nextActions(r), busy, onPick: onStatus, none: r.status === 'Closed' ? 'This release is closed.' : 'No status changes are available to you.' }),
+  ]} />
 }

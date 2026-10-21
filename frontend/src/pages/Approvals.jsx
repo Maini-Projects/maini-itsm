@@ -5,6 +5,7 @@ import { useAuth } from '../auth'
 import { DecisionModal } from '../components/ApprovalBox'
 import SignupRequests from '../components/SignupRequests'
 import { Badge, Empty, ErrorBox, Loading, Priority, RiskBadge, fmtShort, roleLabel, useFetch, useToast } from '../components/ui'
+import CountPill from '../components/CountPill'
 
 const TYPE_LABEL = { incident: 'Incident closure', change: 'Change', release: 'Release' }
 const PATH = { incident: 'incidents', change: 'changes', release: 'releases' }
@@ -20,7 +21,7 @@ export default function Approvals() {
 
   return (
     <>
-      <div className="eyebrow">Governance</div>
+      <div className="eyebrow">Governance <CountPill of="approvals" /></div>
       <h2 className="title">Approval Queue</h2>
       <p className="sub">
         {me.role === 'admin' ? 'Changes, releases and new user sign-ups waiting for your decision.' : 'The status of the changes and releases you raised. An Administrator decides them.'}

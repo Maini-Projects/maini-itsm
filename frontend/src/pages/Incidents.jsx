@@ -4,10 +4,11 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 import NoteBox from '../components/NoteBox'
 import {
-  Badge, Empty, ErrorBox, Field, FormModal, Loading, OpenFor, PRIORITIES, Pager, PersonSelect, Priority, StatusBadge, Text,
+  DetailTitle, FieldBar, statusField, Badge, Empty, ErrorBox, Field, FormModal, Loading, OpenFor, PRIORITIES, Pager, PersonSelect, Priority, StatusBadge, Text,
   Timeline, Workflow, fmtDate, roleLabel, useAction, useDebounced, useFetch,
   useTab,
 } from '../components/ui'
+import CountPill from '../components/CountPill'
 
 const STATUSES = ['New', 'Assigned', 'In Progress', 'Pending', 'Resolved', 'Closed']
 const LIMIT = 25
@@ -44,7 +45,7 @@ export function IncidentList() {
 
   return (
     <>
-      <div className="eyebrow">Incident Management</div>
+      <div className="eyebrow">Incident Management <CountPill of="incidents" /></div>
       <h2 className="title">Incidents</h2>
       <p className="sub">Create, assign, monitor, resolve and close operational incidents.{me.role === 'employee' && ' You see the incidents you raised.'}</p>
       <div className="toolbar">
@@ -73,7 +74,7 @@ export function IncidentList() {
             {data?.items.map((i) => (
               <tr key={i.id}>
                 <td><Link className="link" to={`/incidents/${i.id}`}>{i.number}</Link></td>
-                <td><b>{i.short_description}</b>{i.major_incident && <> <Badge tone="red">Major</Badge></>}</td>
+                <td><b>{i.short_description}</b></td>
                 <td>{i.service_name || '—'}</td><td><Priority p={i.priority} /></td><td>{i.team_name || '—'}</td>
                 <td>{i.assignee_name || '—'}</td><td><StatusBadge status={i.status} /></td><td><OpenFor inc={i} /></td>
               </tr>
@@ -171,12 +172,9 @@ export function IncidentDetail() {
   return (
     <>
       <button className="back" onClick={() => navigate('/incidents')}>‹ Back to incidents</button>
-      <div className="dtitle">
-        <h2>{i.number}</h2><StatusBadge status={i.status} /><Priority p={i.priority} />
-        {i.major_incident && <Badge tone="red">Major incident</Badge>}
-        {i.status === 'Pending' && <Badge tone="gray">On hold</Badge>}
-      </div>
-      <p className="sub">{i.short_description}</p>
+      <DetailTitle number={i.number} title={i.short_description} status={i.status} />
+      <InfoBar inc={i} me={me} people={assignable.data || []} run={run} busy={busy} onDone={refresh}
+        statusActions={actions} onStatus={(a) => (a.notes ? setResolving(a) : move(a.to))} />
       <Workflow steps={steps} current={current} />
       <div className="detail">
         <div className="card">
@@ -185,8 +183,7 @@ export function IncidentDetail() {
               <button key={k} className={`tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{label}</button>
             ))}
           </div>
-          {tab === 'details' && <DetailsForm inc={i} me={me} onSaved={refresh} statusActions={actions} statusBusy={busy}
-            onStatus={(a) => (a.notes ? setResolving(a) : move(a.to))} />}
+          {tab === 'details' && <DetailsForm inc={i} />}
           {tab === 'resolution' && (
             <div className="form"><Field label="Resolution notes" wide><Text value={i.resolution_notes} /></Field>
               {!i.resolution_notes && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 12, color: 'var(--muted)' }}>Notes are added when staff resolve the incident.</div>}
@@ -200,15 +197,6 @@ export function IncidentDetail() {
           )}
         </div>
         <div>
-          <div className="side">
-            <h4>Summary</h4>
-            {[['Priority', <Priority key="p" p={i.priority} />], ['Status', <StatusBadge key="st" status={i.status} />],
-              ['Assignee', i.assignee_name || 'Unassigned'], ['Requester', i.requester_name], ['Application', i.service_name || '—'],
-              ['Open for', <OpenFor key="o" inc={i} />], ['Created', fmtDate(i.created_at)],
-              ['Team', i.team_name || '—'], ['Resolved', fmtDate(i.resolved_at)]].map(([k, v]) => (
-              <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>
-            ))}
-          </div>
           {(i.can_manage || actions.length > 0) && i.status !== 'Closed' && (
             <div className="side">
               <h4>Actions</h4>
@@ -243,7 +231,7 @@ function ResolveModal({ onClose, onSubmit }) {
   return (
     <FormModal title="Resolve incident" submitLabel="Mark resolved" onClose={onClose} onSubmit={() => onSubmit(notes)} width={560}>
       <div className="form" style={{ gridTemplateColumns: '1fr' }}>
-        <Field label="Resolution notes" hint="What was done to fix it. Required."><textarea value={notes} onChange={(e) => setNotes(e.target.value)} required autoFocus /></Field>
+        <Field label="Resolution notes"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} required autoFocus /></Field>
       </div>
     </FormModal>
   )
@@ -251,41 +239,37 @@ function ResolveModal({ onClose, onSubmit }) {
 
 const statusLabel = (s) => (s === 'Pending' ? 'Pending (on hold)' : s)
 
-function DetailsForm({ inc, me, onSaved, statusActions, statusBusy, onStatus }) {
+function DetailsForm({ inc }) {
+  return (
+    <div className="form">
+      <Field label="Short description" wide><Text value={inc.short_description} /></Field>
+      <Field label="Description" wide><Text value={inc.description} /></Field>
+      <Field label="Open for"><div className="ro"><OpenFor inc={inc} /></div></Field>
+      <Field label="Created"><Text value={fmtDate(inc.created_at)} /></Field>
+      {inc.resolved_at && <Field label="Resolved"><Text value={fmtDate(inc.resolved_at)} /></Field>}
+    </div>
+  )
+}
+
+// Application, requester, assignee, priority and status as dropdowns across the top of the incident.
+function InfoBar({ inc, me, people, run, busy, onDone, statusActions, onStatus }) {
   const services = useFetch(() => api.get('/services'))
   const staff = inc.can_manage
   const canEdit = inc.status !== 'Closed' && (staff || (inc.requester_id === me.id && inc.status === 'New'))
-  const initial = () => ({ short_description: inc.short_description, description: inc.description || '', service_id: inc.service_id || '', priority: inc.priority, major_incident: inc.major_incident })
-  const [f, setF] = useState(initial)
-  const [run, busy] = useAction()
-  useEffect(() => setF(initial()), [inc.updated_at]) // eslint-disable-line react-hooks/exhaustive-deps
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
-  const save = (e) => {
-    e.preventDefault()
-    const init = initial()
-    const changes = {}
-    Object.keys(f).forEach((k) => { if (f[k] !== init[k] && (staff || !['priority', 'major_incident'].includes(k))) changes[k] = k === 'service_id' ? f[k] || null : f[k] })
-    if (!Object.keys(changes).length) return
-    run(async () => { await api.patch(`/incidents/${inc.id}`, changes); onSaved() }, 'Incident updated.')
-  }
-  const ro = !canEdit
-  const svc = services.data || []
-  return (
-    <form className="form" onSubmit={save}>
-      <Field label="Short description" wide>{ro ? <Text value={inc.short_description} /> : <input value={f.short_description} onChange={set('short_description')} minLength={3} required />}</Field>
-      <Field label="Application">{ro ? <Text value={inc.service_name} /> : <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{svc.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}</Field>
-      <Field label="Major incident">{staff && canEdit ? <label className="checkrow"><input type="checkbox" checked={f.major_incident} onChange={set('major_incident')} /> Flag as major incident</label> : <Text value={inc.major_incident ? 'Yes' : 'No'} />}</Field>
-      <Field label="Status" hint={statusActions.length === 0 ? (inc.status === 'Closed' ? 'This incident is closed.' : inc.status === 'New' && staff ? 'Assign it to start work.' : 'No status changes are available to you.') : 'Pick the next status to move it on.'}>
-        <select value={inc.status} disabled={statusBusy || statusActions.length === 0}
-          onChange={(e) => { const a = statusActions.find((x) => x.to === e.target.value); if (a) onStatus(a) }}>
-          <option value={inc.status}>{statusLabel(inc.status)}</option>
-          {[...new Map(statusActions.map((a) => [a.to, a])).values()].map((a) => <option key={a.to} value={a.to}>{statusLabel(a.to)}</option>)}
-        </select>
-      </Field>
-      <Field label="Priority">{staff && canEdit ? <select value={f.priority} onChange={set('priority')}>{PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select> : <Priority p={inc.priority} />}</Field>
-      <Field label="Description" wide>{ro ? <Text value={inc.description} /> : <textarea value={f.description} onChange={set('description')} />}</Field>
-      {!ro && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
-      {ro && inc.status !== 'Closed' && !staff && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>You can edit your incident while it is New. After that, the support team works on it — add a note in Activity to update them.</div>}
-    </form>
-  )
+  const patch = (changes, ok) => run(async () => { await api.patch(`/incidents/${inc.id}`, changes); onDone() }, ok)
+  const assign = (assignee_id) => run(async () => { await api.post(`/incidents/${inc.id}/assign`, { assignee_id }); onDone() }, 'Assigned.')
+  const apps = (services.data || []).filter((a) => a.active || a.id === inc.service_id)
+  const none = inc.status === 'Closed' ? 'This incident is closed.' : inc.status === 'New' && staff ? 'Assign it to start work.' : 'No status changes are available to you.'
+  return <FieldBar fields={[
+    { label: 'Application', value: inc.service_id || '', locked: !canEdit, disabled: busy, onChange: (v) => patch({ service_id: v || null }, 'Application updated.'),
+      options: [{ value: '', label: 'None' }, ...apps.map((a) => ({ value: a.id, label: a.name }))] },
+    { label: 'Requester', text: inc.requester_name },
+    { label: 'Assignee', value: inc.assignee_id || '', locked: !(staff && inc.status !== 'Closed'), disabled: busy, onChange: (v) => v && assign(v),
+      options: [...(inc.assignee_id ? [] : [{ value: '', label: 'Unassigned' }]),
+        ...(inc.assignee_id && !people.some((x) => x.id === inc.assignee_id) ? [{ value: inc.assignee_id, label: inc.assignee_name }] : []),
+        ...people.map((x) => ({ value: x.id, label: x.full_name }))] },
+    { label: 'Priority', value: inc.priority, locked: !(staff && canEdit), disabled: busy, onChange: (v) => patch({ priority: v }, 'Priority updated.'),
+      options: PRIORITIES.map(([v, l]) => ({ value: v, label: l })) },
+    statusField({ status: inc.status, actions: statusActions, busy, onPick: onStatus, none, label: statusLabel }),
+  ]} />
 }

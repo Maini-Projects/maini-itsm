@@ -335,3 +335,61 @@ export function useAction() {
   }
   return [run, busy]
 }
+
+// ---- the title line and dropdown bar at the top of every record screen -------------------------
+export function DetailTitle({ number, title, status }) {
+  return (
+    <div className="dtitle">
+      <h2 className="dnum">{number}</h2><h2 className="dname">{title}</h2><StatusBadge status={status} />
+    </div>
+  )
+}
+
+// fields: [{ label, value, options: [{ value, label }], onChange(value) -> saves it, locked, disabled, title }]
+// Edits are only held on screen; a Save button appears once something differs from what is stored.
+export function FieldBar({ fields }) {
+  const [draft, setDraft] = useState({})
+  const [saving, setSaving] = useState(false)
+  const dirty = fields.filter((f) => f.onChange && !f.locked && draft[f.label] !== undefined && draft[f.label] !== f.value)
+  const save = async () => {
+    setSaving(true)
+    try {
+      // the status goes last: moving on (for example to Resolved) may open a window of its own
+      for (const f of [...dirty].sort((x, y) => (x.label === 'Status') - (y.label === 'Status'))) await f.onChange(draft[f.label])
+    } finally { setSaving(false); setDraft({}) }
+  }
+  return (
+    <div className="infobar">
+      {fields.map((f) => (
+        <div className="field" key={f.label}>
+          <label>{f.label}</label>
+          {f.text !== undefined || f.locked
+            ? <div className="ro-box" title={f.title}>{(f.text !== undefined ? f.text : (f.options.find((o) => o.value === f.value) || {}).label) || '—'}</div>
+            : (
+              <select className={dirty.includes(f) ? 'changed' : ''} value={draft[f.label] ?? f.value ?? ''} disabled={f.disabled || saving} title={f.title}
+                onChange={(e) => setDraft({ ...draft, [f.label]: e.target.value })}>
+                {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            )}
+        </div>
+      ))}
+      {dirty.length > 0 && (
+        <div className="infobar-save">
+          <span>You have unsaved changes</span>
+          <button type="button" className="btn2" onClick={() => setDraft({})} disabled={saving}>Discard</button>
+          <button type="button" className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// The Status dropdown: the current status plus every status the viewer may move it to.
+export function statusField({ status, actions, busy, onPick, none, label = (s) => s }) {
+  const next = [...new Map(actions.map((a) => [a.to, a])).values()]
+  return {
+    label: 'Status', value: status, locked: next.length === 0, disabled: busy, title: next.length === 0 ? none : undefined,
+    options: [{ value: status, label: label(status) }, ...next.map((a) => ({ value: a.to, label: label(a.to) }))],
+    onChange: (to) => { const a = next.find((x) => x.to === to); return a ? onPick(a) : undefined },
+  }
+}

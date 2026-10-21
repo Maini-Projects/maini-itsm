@@ -11,17 +11,6 @@ const SECTIONS = [
   { title: 'Administration', items: [['admin', 'Admin']] },
 ]
 
-function sidebarCount(key, c) {
-  if (!c) return null
-  if (key === 'incidents') return c.incidents?.open
-  if (key === 'problems') return c.problems ? Object.values(c.problems).reduce((a, b) => a + b, 0) : null
-  if (key === 'defects') return c.defects?.open
-  if (key === 'changes') return c.changes?.active
-  if (key === 'releases') return c.releases?.upcoming_14_days
-  if (key === 'approvals') return c.pending_approvals ? c.pending_approvals.total + (c.pending_signups || 0) : null
-  return null
-}
-
 function ChangePassword({ onClose }) {
   const toast = useToast()
   const [cur, setCur] = useState(''), [next, setNext] = useState(''), [again, setAgain] = useState('')
@@ -42,7 +31,7 @@ function ChangePassword({ onClose }) {
 }
 
 export default function Layout() {
-  const { me, signOut, counts, refreshCounts } = useAuth()
+  const { me, signOut, refreshCounts } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false) // small screens: the slide-in menu
@@ -104,11 +93,9 @@ export default function Layout() {
                 <div className="side-title">{sec.title}</div>
                 <div className="nav-group">
                   {items.map(([key, label]) => {
-                    const n = sidebarCount(key, counts)
                     return (
                       <NavLink key={key} to={`/${key}`} className={({ isActive }) => `nav ${isActive ? 'active' : ''}`}>
                         <span className="menu-label">{label}</span>
-                        {n !== null && n !== undefined && <span className="count">{n}</span>}
                         <span className="chev">›</span>
                       </NavLink>
                     )

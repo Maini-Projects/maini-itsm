@@ -5,10 +5,11 @@ import { useAuth } from '../auth'
 import NoteBox from '../components/NoteBox'
 import ApprovalBox from '../components/ApprovalBox'
 import {
-  Badge, Empty, ErrorBox, Field, FormModal, Loading, Pager, RiskBadge, StatusBadge, Text, Timeline, Workflow, fmtDate,
+  DetailTitle, FieldBar, statusField, Badge, Empty, ErrorBox, Field, FormModal, Loading, Pager, RiskBadge, StatusBadge, Text, Timeline, Workflow, fmtDate,
   fmtShort, fromInputDate, toInputDate, useAction, useDebounced, useFetch,
   useTab,
 } from '../components/ui'
+import CountPill from '../components/CountPill'
 
 const STATUSES = ['Draft', 'Submitted', 'Under Review', 'Approval Pending', 'Scheduled', 'Implementation', 'Implemented', 'Closed']
 const LEVELS = ['High', 'Medium', 'Low']
@@ -31,7 +32,7 @@ export function ChangeList() {
   const { data, error, loading } = useFetch(() => api.get('/changes', { q: dq.trim(), type, status, risk, limit: LIMIT, offset }), [dq, type, status, risk, offset])
   return (
     <>
-      <div className="eyebrow">Change Management</div>
+      <div className="eyebrow">Change Management <CountPill of="changes" /></div>
       <h2 className="title">Change Requests</h2>
       <p className="sub">Standard, normal and emergency changes with risk, approval and scheduling. Support Engineers raise changes; an Administrator approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
@@ -123,11 +124,8 @@ export function ChangeDetail() {
   return (
     <>
       <button className="back" onClick={() => navigate('/changes')}>‹ Back to changes</button>
-      <div className="dtitle">
-        <h2>{c.number}</h2><StatusBadge status={c.status} /><RiskBadge risk={c.risk} />
-        {c.type === 'Emergency' && <Badge tone="red">Emergency</Badge>}
-      </div>
-      <p className="sub">{c.title}</p>
+      <DetailTitle number={c.number} title={c.title} status={c.status} />
+      <ChangeBar c={c} me={me} run={run} busy={busy} onDone={refresh} onStatus={(a) => move(a.to)} />
       <Workflow steps={STATUSES} current={c.status} />
       <div className="detail">
         <div className="card">
@@ -143,18 +141,9 @@ export function ChangeDetail() {
           )}
         </div>
         <div>
-          <div className="side">
-            <h4>Summary</h4>
-            {[['Type', c.type], ['Risk', c.risk], ['Application', c.service_name || '—'], ['Team', c.team_name || '—'], ['Requester', c.requester_name],
-              ['Planned start', fmtDate(c.planned_start)], ['Planned end', fmtDate(c.planned_end)], ['Created', fmtDate(c.created_at)]].map(([k, v]) => <div className="sr" key={k}><label>{k}</label><b>{v}</b></div>)}
-            {c.releases.length > 0 && <div className="sr"><label>In releases</label><b>{c.releases.map((r) => <div key={r.id}><Link className="link" to={`/releases/${r.id}`}>{r.number}</Link> {r.name}</div>)}</b></div>}
-          </div>
-          {nextActions(c).length > 0 && (
+          {c.status === 'Under Review' && c.can_manage && (
             <div className="side"><h4>Actions</h4>
-              <div className="sideactions">
-                {nextActions(c).map((a) => <button key={a.label} className="btn" disabled={busy} onClick={() => move(a.to)}>{a.label}</button>)}
-                {c.status === 'Under Review' && <div className="note">Needs an implementation plan, backout plan and planned start before approval.</div>}
-              </div>
+              <div className="sideactions"><div className="note">Needs an implementation plan, backout plan and planned start before approval.</div></div>
             </div>
           )}
           <ApprovalBox approvals={c.approvals} canDecide={me.role === 'admin'} onChanged={refresh} />
@@ -165,9 +154,8 @@ export function ChangeDetail() {
 }
 
 function ChangeForm({ c, me, onSaved }) {
-  const services = useFetch(() => api.get('/services'))
   const canEdit = c.can_manage && c.status !== 'Closed' && (c.status === 'Draft' || me.role === 'admin')
-  const initial = () => ({ title: c.title, type: c.type, risk: c.risk, service_id: c.service_id || '', implementation_plan: c.implementation_plan || '', test_plan: c.test_plan || '', backout_plan: c.backout_plan || '', planned_start: toInputDate(c.planned_start), planned_end: toInputDate(c.planned_end) })
+  const initial = () => ({ implementation_plan: c.implementation_plan || '', test_plan: c.test_plan || '', backout_plan: c.backout_plan || '', planned_start: toInputDate(c.planned_start), planned_end: toInputDate(c.planned_end) })
   const [f, setF] = useState(initial)
   const [run, busy] = useAction()
   useEffect(() => setF(initial()), [c.updated_at]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -177,25 +165,38 @@ function ChangeForm({ c, me, onSaved }) {
     const init = initial(), changes = {}
     Object.keys(f).forEach((k) => {
       if (f[k] === init[k]) return
-      changes[k] = k === 'service_id' ? f[k] || null : k.startsWith('planned') ? fromInputDate(f[k]) : f[k]
+      changes[k] = k.startsWith('planned') ? fromInputDate(f[k]) : f[k]
     })
     if (!Object.keys(changes).length) return
     run(async () => { await api.patch(`/changes/${c.id}`, changes); onSaved() }, 'Change updated.')
   }
   return (
     <form className="form" onSubmit={save}>
-      <Field label="Title" wide>{canEdit ? <input value={f.title} onChange={set('title')} minLength={3} required /> : <Text value={c.title} />}</Field>
-      <Field label="Type">{canEdit ? <select value={f.type} onChange={set('type')}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select> : <Text value={c.type} />}</Field>
-      <Field label="Risk">{canEdit ? <select value={f.risk} onChange={set('risk')}>{LEVELS.map((t) => <option key={t}>{t}</option>)}</select> : <Text value={c.risk} />}</Field>
-      <Field label="Application">{canEdit ? <select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select> : <Text value={c.service_name} />}</Field>
-      <div />
+      <Field label="Title" wide><Text value={c.title} /></Field>
       <Field label="Planned start">{canEdit ? <input type="datetime-local" value={f.planned_start} onChange={set('planned_start')} /> : <Text value={c.planned_start && fmtDate(c.planned_start)} />}</Field>
       <Field label="Planned end">{canEdit ? <input type="datetime-local" value={f.planned_end} onChange={set('planned_end')} /> : <Text value={c.planned_end && fmtDate(c.planned_end)} />}</Field>
       <Field label="Implementation plan" wide>{canEdit ? <textarea value={f.implementation_plan} onChange={set('implementation_plan')} /> : <Text value={c.implementation_plan} />}</Field>
       <Field label="Backout plan" wide>{canEdit ? <textarea value={f.backout_plan} onChange={set('backout_plan')} /> : <Text value={c.backout_plan} />}</Field>
       <Field label="Test plan" wide>{canEdit ? <textarea value={f.test_plan} onChange={set('test_plan')} /> : <Text value={c.test_plan} />}</Field>
+      <Field label="Created"><Text value={fmtDate(c.created_at)} /></Field>
+      {c.releases.length > 0 && <Field label="In releases"><div className="ro">{c.releases.map((r) => <div key={r.id}><Link className="link" to={`/releases/${r.id}`}>{r.number}</Link> {r.name}</div>)}</div></Field>}
       {canEdit && <div className="formactions"><button className="btn" disabled={busy}>Save changes</button></div>}
-      {!canEdit && c.status !== 'Closed' && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>A change can be edited while it is a Draft (Administrators can edit until it is closed).</div>}
     </form>
   )
+}
+
+// Application, requester, type, risk and status as dropdowns across the top of the change.
+function ChangeBar({ c, me, run, busy, onDone, onStatus }) {
+  const services = useFetch(() => api.get('/services'))
+  const canEdit = c.can_manage && c.status !== 'Closed' && (c.status === 'Draft' || me.role === 'admin')
+  const patch = (changes, ok) => run(async () => { await api.patch(`/changes/${c.id}`, changes); onDone() }, ok)
+  const apps = (services.data || []).filter((a) => a.active || a.id === c.service_id)
+  return <FieldBar fields={[
+    { label: 'Application', value: c.service_id || '', locked: !canEdit, disabled: busy, onChange: (v) => patch({ service_id: v || null }, 'Application updated.'),
+      options: [{ value: '', label: 'None' }, ...apps.map((a) => ({ value: a.id, label: a.name }))] },
+    { label: 'Requester', text: c.requester_name },
+    { label: 'Type', value: c.type, locked: !canEdit, disabled: busy, onChange: (v) => patch({ type: v }, 'Type updated.'), options: TYPES.map((t) => ({ value: t, label: t })) },
+    { label: 'Risk', value: c.risk, locked: !canEdit, disabled: busy, onChange: (v) => patch({ risk: v }, 'Risk updated.'), options: LEVELS.map((t) => ({ value: t, label: t })) },
+    statusField({ status: c.status, actions: nextActions(c), busy, onPick: onStatus, none: c.status === 'Closed' ? 'This change is closed.' : 'No status changes are available to you.' }),
+  ]} />
 }
