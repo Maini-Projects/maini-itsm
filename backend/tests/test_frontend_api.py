@@ -597,6 +597,7 @@ def test_signup_can_be_rejected_and_repeated(client):
     assert client.app.state.fake_auth_admin.deleted                                      # the login was removed
     assert client.get(f"{API}/signup-requests", headers=ADMIN).json() == []
     assert len(client.get(f"{API}/signup-requests?status=rejected", headers=ADMIN).json()) == 1
+    assert len(client.get(f"{API}/signup-requests?status=all", headers=ADMIN).json()) == 1
     assert _signup(client, "no@example.com").status_code == 201                       # may ask again
 
 

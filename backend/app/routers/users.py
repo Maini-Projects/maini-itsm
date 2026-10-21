@@ -117,10 +117,12 @@ class ApproveIn(BaseModel):
 
 
 @router.get("/signup-requests")
-def list_signup_requests(status: Literal["pending", "approved", "rejected"] = "pending",
+def list_signup_requests(status: Literal["pending", "approved", "rejected", "all"] = "pending",
                          _: Principal = Depends(require_roles("admin")), conn=Depends(get_conn)):
-    return fetch_all(conn, """select id, email, full_name, status, created_at, decided_at
-                              from signup_requests where status = %(s)s order by created_at""", {"s": status})
+    return fetch_all(conn, """select r.id, r.email, r.full_name, r.status, r.created_at, r.decided_at,
+                                     d.full_name as decided_by_name
+                              from signup_requests r left join profiles d on d.id = r.decided_by
+                              where %(s)s = 'all' or r.status = %(s)s order by r.created_at desc""", {"s": status})
 
 
 def _open_request(conn, request_id):

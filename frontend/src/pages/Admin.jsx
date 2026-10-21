@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import { Badge, Empty, ErrorBox, Field, FormModal, Loading, roleLabel, useFetch, useToast } from '../components/ui'
@@ -13,8 +14,6 @@ export default function Admin() {
   const teams = useFetch(() => api.get('/teams'))
   const { data, error, loading, reload } = useFetch(() => api.get('/users', { q: q.trim(), role }), [q, role])
   const requests = useFetch(() => api.get('/signup-requests'))
-  const { refreshCounts } = useAuth()
-  const changed = () => { reload(); requests.reload(); refreshCounts() }
   return (
     <>
       <div className="eyebrow">Administration</div>
@@ -29,22 +28,8 @@ export default function Admin() {
       </div>
       <ErrorBox error={error} />
       {!!requests.data?.length && (
-        <div className="card table" style={{ marginBottom: 16 }}>
-          <div style={{ padding: '12px 14px', fontWeight: 700 }}>Sign-up requests waiting for approval ({requests.data.length})</div>
-          <table>
-            <thead><tr><th>Name</th><th>Email</th><th>Requested</th><th /></tr></thead>
-            <tbody>
-              {requests.data.map((r) => (
-                <tr key={r.id}>
-                  <td><b>{r.full_name}</b></td><td>{r.email}</td><td>{new Date(r.created_at).toLocaleString()}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="btn" onClick={() => setModal({ kind: 'approve', request: r })}>Approve</button>{' '}
-                    <button className="btn2" onClick={() => setModal({ kind: 'reject', request: r })}>Reject</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="card" style={{ padding: '12px 14px', marginBottom: 16 }}>
+          <b>{requests.data.length} new sign-up request{requests.data.length === 1 ? '' : 's'}</b> waiting for your decision. <Link className="link" to="/approvals">Review in Approvals</Link>
         </div>
       )}
       <div className="card table">
@@ -68,8 +53,6 @@ export default function Admin() {
       </div>
       {modal?.kind === 'new' && <UserModal teams={teams.data || []} onClose={() => setModal(null)} onSaved={reload} />}
       {modal?.kind === 'edit' && <UserModal user={modal.user} self={modal.user.id === me.id} teams={teams.data || []} onClose={() => setModal(null)} onSaved={reload} />}
-      {modal?.kind === 'approve' && <ApproveModal request={modal.request} teams={teams.data || []} onClose={() => setModal(null)} onSaved={changed} />}
-      {modal?.kind === 'reject' && <RejectModal request={modal.request} onClose={() => setModal(null)} onSaved={changed} />}
       {modal?.kind === 'password' && <PasswordModal user={modal.user} onClose={() => setModal(null)} />}
     </>
   )
@@ -103,39 +86,6 @@ function UserModal({ user, self, teams, onClose, onSaved }) {
         {user && <Field label="Status"><select value={f.status} onChange={set('status')} disabled={self}><option value="active">active</option><option value="disabled">disabled</option></select></Field>}
         {self && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>You cannot remove your own Administrator access or disable yourself.</div>}
       </div>
-    </FormModal>
-  )
-}
-
-function ApproveModal({ request, teams, onClose, onSaved }) {
-  const toast = useToast()
-  const [f, setF] = useState({ role: 'employee', team_id: '' })
-  const needsTeam = f.role !== 'admin'
-  return (
-    <FormModal title={`Approve ${request.full_name}`} submitLabel="Approve" onClose={onClose} width={480}
-      onSubmit={async () => {
-        if (needsTeam && !f.team_id) throw new Error('Choose a team for Support Engineers and Customers.')
-        await api.post(`/signup-requests/${request.id}/approve`, { role: f.role, team_id: needsTeam ? f.team_id : null })
-        toast(`${request.full_name} can now sign in.`)
-        onSaved()
-      }}>
-      <div className="form">
-        <Field label="Email"><div className="ro">{request.email}</div></Field>
-        <Field label="Role"><select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select></Field>
-        <Field label="Team" hint={needsTeam ? 'Required. A Support Engineer sees only their own team.' : 'Administrators are not tied to a team.'}>
-          <select value={needsTeam ? f.team_id : ''} onChange={(e) => setF({ ...f, team_id: e.target.value })} disabled={!needsTeam}><option value="">{needsTeam ? 'Choose a team' : '—'}</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-        </Field>
-      </div>
-    </FormModal>
-  )
-}
-
-function RejectModal({ request, onClose, onSaved }) {
-  const toast = useToast()
-  return (
-    <FormModal title={`Reject ${request.full_name}?`} submitLabel="Reject request" danger onClose={onClose} width={480}
-      onSubmit={async () => { await api.post(`/signup-requests/${request.id}/reject`); toast('Request rejected.'); onSaved() }}>
-      <p style={{ fontSize: 13 }}>The login for {request.email} will be removed. They can sign up again later if this was a mistake.</p>
     </FormModal>
   )
 }

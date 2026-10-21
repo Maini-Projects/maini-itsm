@@ -88,7 +88,7 @@ The back end's `CORS_ORIGINS` must include the address the app runs on (default 
 ## Self sign-up
 
 The sign-in page has a **Create an account** link. The form asks for name, email and password only. The new login cannot use the
-portal until an Administrator opens **Admin**, finds it under *Sign-up requests waiting for approval* (the sidebar shows a count),
+portal until an Administrator opens **Approvals**, finds it under *New user sign-ups* (the Approvals count in the sidebar includes it),
 and approves it by choosing a role and team, or rejects it (which removes the login). Until then, signing in says the request is
 waiting for approval. Needs migration 006.
 

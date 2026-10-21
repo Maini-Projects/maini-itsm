@@ -18,8 +18,7 @@ function sidebarCount(key, c) {
   if (key === 'defects') return c.defects?.open
   if (key === 'changes') return c.changes?.active
   if (key === 'releases') return c.releases?.upcoming_14_days
-  if (key === 'approvals') return c.pending_approvals?.total
-  if (key === 'admin') return c.pending_signups || null
+  if (key === 'approvals') return c.pending_approvals ? c.pending_approvals.total + (c.pending_signups || 0) : null
   return null
 }
 

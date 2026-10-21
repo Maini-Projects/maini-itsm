@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import { DecisionModal } from '../components/ApprovalBox'
+import SignupRequests from '../components/SignupRequests'
 import { Badge, Empty, ErrorBox, Loading, Priority, RiskBadge, fmtShort, roleLabel, useFetch, useToast } from '../components/ui'
 
 const TYPE_LABEL = { incident: 'Incident closure', change: 'Change', release: 'Release' }
@@ -22,7 +23,7 @@ export default function Approvals() {
       <div className="eyebrow">Governance</div>
       <h2 className="title">Approval Queue</h2>
       <p className="sub">
-        {me.role === 'admin' ? 'Changes and releases waiting for your decision.' : 'The status of the changes and releases you raised. An Administrator decides them.'}
+        {me.role === 'admin' ? 'Changes, releases and new user sign-ups waiting for your decision.' : 'The status of the changes and releases you raised. An Administrator decides them.'}
       </p>
       <div className="toolbar">
         <div className="filters">
@@ -64,6 +65,7 @@ export default function Approvals() {
         {loading && !data && <Loading />}
         {data && !data.length && <Empty>{status === 'pending' ? 'Nothing is waiting for approval.' : 'No approvals to show.'}</Empty>}
       </div>
+      {me.role === 'admin' && <SignupRequests status={status} />}
       {deciding && <DecisionModal approvalId={deciding.id} decision={deciding.decision} onClose={() => setDeciding(null)} onDone={done} />}
     </>
   )
