@@ -120,9 +120,8 @@ function SlaModal({ policy, onClose, onSaved }) {
   return (
     <FormModal title={`Edit ${priorityLabel(policy.priority)} targets`} onClose={onClose} onSubmit={submit} width={480}>
       <div className="form">
-        <Field label="Response (minutes)" hint={`= ${fmtTarget(Number(resp) || 0)}`}><input type="number" min="1" value={resp} onChange={(e) => setResp(e.target.value)} required /></Field>
-        <Field label="Resolution (minutes)" hint={`= ${fmtTarget(Number(reso) || 0)}`}><input type="number" min="1" value={reso} onChange={(e) => setReso(e.target.value)} required /></Field>
-        <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>New targets apply to incidents raised or re-prioritised from now on.</div>
+        <Field label="Response (minutes)"><input type="number" min="1" value={resp} onChange={(e) => setResp(e.target.value)} required /></Field>
+        <Field label="Resolution (minutes)"><input type="number" min="1" value={reso} onChange={(e) => setReso(e.target.value)} required /></Field>
       </div>
     </FormModal>
   )

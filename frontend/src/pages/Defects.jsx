@@ -114,7 +114,7 @@ function NewDefect({ onClose, onCreated }) {
           </select>
         </Field>
         <Field label="Environment"><select value={f.environment} onChange={set('environment')}>{ENVIRONMENTS.map((l) => <option key={l}>{l}</option>)}</select></Field>
-        <Field label="Severity" hint="How badly it affects users."><select value={f.severity} onChange={set('severity')}>{SEVERITIES.map((l) => <option key={l}>{l}</option>)}</select></Field>
+        <Field label="Severity"><select value={f.severity} onChange={set('severity')}>{SEVERITIES.map((l) => <option key={l}>{l}</option>)}</select></Field>
         <div />
         <Field label="Description" wide><textarea value={f.description} onChange={set('description')} /></Field>
         <Field label="Steps to reproduce" wide><textarea value={f.steps_to_reproduce} onChange={set('steps_to_reproduce')} /></Field>
@@ -183,7 +183,6 @@ export function DefectDetail() {
           {tab === 'details' && <DetailsForm defect={d} />}
           {tab === 'resolution' && (
             <div className="form"><Field label="Resolution notes" wide><Text value={d.resolution_notes} /></Field>
-              {!d.resolution_notes && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 12, color: 'var(--muted)' }}>Notes are added when staff resolve the defect.</div>}
             </div>
           )}
           {tab === 'activity' && (

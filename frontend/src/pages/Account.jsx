@@ -20,7 +20,7 @@ function AuditRetention() {
       <h3 style={{ marginTop: 0 }}>Audit history</h3>
       <ErrorBox error={error} />
       <div className="form" style={{ gridTemplateColumns: '1fr' }}>
-        <Field label="Keep audit logs for" hint="Audit History shows only entries from this period. Default is 10 days.">
+        <Field label="Keep audit logs for">
           <select value={keep} onChange={(e) => save(Number(e.target.value))}>
             {KEEP.map(([d, l]) => <option key={d} value={d}>{l}{d === 10 ? ' (default)' : ''}</option>)}
           </select>

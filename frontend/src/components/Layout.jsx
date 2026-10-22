@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import ChangePassword from './ChangePassword'
 import ProjectPicker from './ProjectPicker'
 import { roleLabel } from './ui'
 
@@ -20,7 +19,6 @@ export default function Layout() {
   const [open, setOpen] = useState(false) // small screens: the slide-in menu
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('itsm.sidebar') === 'collapsed' } catch { return false } })
   const [menu, setMenu] = useState(false)
-  const [pw, setPw] = useState(false)
   const [search, setSearch] = useState('')
   const [now, setNow] = useState(new Date())
   const activeIds = me.active_project_ids || []
@@ -75,7 +73,6 @@ export default function Layout() {
           <div className="usermenu">
             <div className="who"><b>{me.full_name}</b><span>{me.email}<br />{roleLabel(me.role)}{me.team_name ? ` · ${me.team_name} team` : ''}</span></div>
             <button onClick={() => { setMenu(false); navigate('/account') }}>Account settings</button>
-            <button onClick={() => { setMenu(false); setPw(true) }}>Change password</button>
             <button onClick={signOut}>Sign out</button>
           </div>
         )}
@@ -110,7 +107,6 @@ export default function Layout() {
           <main className="content"><Outlet /></main>
         </div>
       </div>
-      {pw && <ChangePassword onClose={() => setPw(false)} />}
     </>
   )
 }

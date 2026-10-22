@@ -174,12 +174,11 @@ export function FormModal({ title, submitLabel = 'Save', onClose, onSubmit, chil
 }
 
 // ---- form fields ---------------------------------------------------------------------------
-export function Field({ label, wide, hint, children }) {
+export function Field({ label, wide, children }) {
   return (
     <div className={`field ${wide ? 'wide' : ''}`}>
       <label>{label}</label>
       {children}
-      {hint && <div className="hint">{hint}</div>}
     </div>
   )
 }

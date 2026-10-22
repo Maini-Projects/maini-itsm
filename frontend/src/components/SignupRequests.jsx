@@ -57,15 +57,15 @@ function ApproveModal({ request, teams, onClose, onSaved }) {
     <FormModal title={`Approve ${request.full_name}`} submitLabel="Approve" onClose={onClose} width={480}
       onSubmit={async () => {
         if (needsTeam && !f.team_id) throw new Error('Choose a team for Support Engineers and Customers.')
-        await api.post(`/signup-requests/${request.id}/approve`, { role: f.role, team_id: needsTeam ? f.team_id : null })
+        await api.post(`/signup-requests/${request.id}/approve`, { role: f.role, team_id: f.team_id || null })
         toast(`${request.full_name} can now sign in.`)
         onSaved()
       }}>
       <div className="form">
         <Field label="Email"><div className="ro">{request.email}</div></Field>
         <Field label="Role"><select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select></Field>
-        <Field label="Team" hint={needsTeam ? 'Required. A Support Engineer sees only their own team.' : 'Administrators are not tied to a team.'}>
-          <select value={needsTeam ? f.team_id : ''} onChange={(e) => setF({ ...f, team_id: e.target.value })} disabled={!needsTeam}><option value="">{needsTeam ? 'Choose a team' : '—'}</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+        <Field label="Team">
+          <select value={f.team_id} onChange={(e) => setF({ ...f, team_id: e.target.value })}><option value="">{needsTeam ? 'Choose a team' : 'No team'}</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
         </Field>
       </div>
     </FormModal>

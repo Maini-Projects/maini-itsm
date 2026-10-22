@@ -116,7 +116,7 @@ function NewIncident({ onClose, onCreated }) {
           </select>
         </Field>
         {me.role === 'admin' && (
-          <Field label="Raise on behalf of" hint="Optional. Sets the team for the incident.">
+          <Field label="Raise on behalf of">
             <select value={f.requester_id} onChange={set('requester_id')}>
               <option value="">Myself</option>
               {(people.data || []).filter((p) => p.status === 'active').map((p) => <option key={p.id} value={p.id}>{p.full_name} ({p.team_name || roleLabel(p.role)})</option>)}
@@ -190,7 +190,6 @@ export function IncidentDetail() {
           {tab === 'details' && <DetailsForm inc={i} />}
           {tab === 'resolution' && (
             <div className="form"><Field label="Resolution notes" wide><Text value={i.resolution_notes} /></Field>
-              {!i.resolution_notes && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 12, color: 'var(--muted)' }}>Notes are added when staff resolve the incident.</div>}
             </div>
           )}
           {tab === 'activity' && (

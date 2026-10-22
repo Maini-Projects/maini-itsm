@@ -86,8 +86,8 @@ function NewChange({ onClose, onCreated }) {
         <div />
         <Field label="Planned start"><input type="datetime-local" value={f.planned_start} onChange={set('planned_start')} /></Field>
         <Field label="Planned end"><input type="datetime-local" value={f.planned_end} onChange={set('planned_end')} /></Field>
-        <Field label="Implementation plan" wide hint="Required before it can go for approval."><textarea value={f.implementation_plan} onChange={set('implementation_plan')} /></Field>
-        <Field label="Backout plan" wide hint="Required before it can go for approval."><textarea value={f.backout_plan} onChange={set('backout_plan')} /></Field>
+        <Field label="Implementation plan" wide><textarea value={f.implementation_plan} onChange={set('implementation_plan')} /></Field>
+        <Field label="Backout plan" wide><textarea value={f.backout_plan} onChange={set('backout_plan')} /></Field>
         <Field label="Test plan" wide><textarea value={f.test_plan} onChange={set('test_plan')} /></Field>
       </div>
     </FormModal>

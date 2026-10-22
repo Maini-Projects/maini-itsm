@@ -65,11 +65,6 @@ export default function NoteBox({ kind, id, staff, notes = true, ownerLabel = 'r
           ))}
         </div>
       )}
-      {files.length > 0 && internal && (
-        <div className="hint" style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>
-          Attached files are visible to everyone who can see this record, even when the note is internal.
-        </div>
-      )}
       <div className="add-note-actions">
         <span style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
           {canAttach && (

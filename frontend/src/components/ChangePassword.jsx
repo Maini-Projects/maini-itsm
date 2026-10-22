@@ -15,7 +15,7 @@ export default function ChangePassword({ onClose }) {
     <FormModal title="Change password" submitLabel="Change password" onClose={onClose} onSubmit={submit} width={460}>
       <div className="form" style={{ gridTemplateColumns: '1fr' }}>
         <Field label="Current password"><PasswordInput value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></Field>
-        <Field label="New password" hint="At least 8 characters."><PasswordInput value={next} onChange={(e) => setNext(e.target.value)} minLength={8} autoComplete="new-password" required /></Field>
+        <Field label="New password"><PasswordInput value={next} onChange={(e) => setNext(e.target.value)} minLength={8} autoComplete="new-password" required /></Field>
         <Field label="Repeat new password"><PasswordInput value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" required /></Field>
       </div>
     </FormModal>

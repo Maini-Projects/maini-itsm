@@ -79,8 +79,8 @@ function NewRelease({ onClose, onCreated }) {
         <Field label="Application"><select value={f.service_id} onChange={set('service_id')}><option value="">None</option>{(services.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         <Field label="Deployment date"><input type="datetime-local" value={f.deployment_at} onChange={set('deployment_at')} /></Field>
         <div />
-        <Field label="Scope" wide hint="Required before it can be sent for review."><textarea value={f.scope} onChange={set('scope')} /></Field>
-        <Field label="Rollback plan" wide hint="Required before it can be sent for review."><textarea value={f.rollback_plan} onChange={set('rollback_plan')} /></Field>
+        <Field label="Scope" wide><textarea value={f.scope} onChange={set('scope')} /></Field>
+        <Field label="Rollback plan" wide><textarea value={f.rollback_plan} onChange={set('rollback_plan')} /></Field>
       </div>
     </FormModal>
   )

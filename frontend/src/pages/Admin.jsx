@@ -72,7 +72,7 @@ function UserModal({ user, self, teams, onClose, onSaved }) {
   const canHaveProjects = true
   const submit = async () => {
     if (needsTeam && !f.team_id) throw new Error('Choose a team for Support Engineers and Customers.')
-    const team_id = needsTeam ? f.team_id : null
+    const team_id = f.team_id || null // optional for Administrators
     if (user) await api.patch(`/users/${user.id}`, { full_name: f.full_name, role: f.role, team_id, status: f.status })
     else await api.post('/users', { email: f.email.trim(), full_name: f.full_name, password: f.password, role: f.role, team_id })
     const saved = user || (await api.get('/users', { q: f.email.trim() })).find((u) => u.email.toLowerCase() === f.email.trim().toLowerCase())
@@ -85,18 +85,17 @@ function UserModal({ user, self, teams, onClose, onSaved }) {
       <div className="form">
         <Field label="Full name"><input value={f.full_name} onChange={set('full_name')} required autoFocus /></Field>
         <Field label="Email">{user ? <div className="ro">{user.email}</div> : <input type="email" value={f.email} onChange={set('email')} required />}</Field>
-        {!user && <Field label="Temporary password" hint="At least 8 characters. They can change it after signing in."><input type="text" value={f.password} onChange={set('password')} minLength={8} required autoComplete="off" /></Field>}
+        {!user && <Field label="Temporary password"><input type="text" value={f.password} onChange={set('password')} minLength={8} required autoComplete="off" /></Field>}
         <Field label="Role">
           <select value={f.role} onChange={set('role')} disabled={self}>{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select>
         </Field>
-        <Field label="Team" hint={needsTeam ? 'Required. A Support Engineer sees only their own team.' : 'Administrators are not tied to a team.'}>
-          <select value={needsTeam ? f.team_id : ''} onChange={set('team_id')} disabled={!needsTeam}><option value="">{needsTeam ? 'Choose a team' : '—'}</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+        <Field label="Team">
+          <select value={f.team_id} onChange={set('team_id')}><option value="">{needsTeam ? 'Choose a team' : 'No team'}</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
         </Field>
-        <Field label="Projects" wide hint="Projects this person works on; with more than one they can switch between them from the top bar. Administrators see all projects.">
+        <Field label="Projects" wide>
           <ProjectPicker projects={projects.data || []} picked={picked} onChange={setPicked} />
         </Field>
         {user && <Field label="Status"><select value={f.status} onChange={set('status')} disabled={self}><option value="active">active</option><option value="disabled">disabled</option></select></Field>}
-        {self && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>You cannot remove your own Administrator access or disable yourself.</div>}
       </div>
     </FormModal>
   )
@@ -109,7 +108,7 @@ function PasswordModal({ user, onClose }) {
     <FormModal title={`Reset password for ${user.full_name}`} submitLabel="Set password" onClose={onClose} width={480}
       onSubmit={async () => { await api.post(`/users/${user.id}/password`, { new_password: pw }); toast('Password updated.') }}>
       <div className="form" style={{ gridTemplateColumns: '1fr' }}>
-        <Field label="New password" hint="At least 8 characters. Tell the user directly; they can change it after signing in."><input type="text" value={pw} onChange={(e) => setPw(e.target.value)} minLength={8} required autoComplete="off" autoFocus /></Field>
+        <Field label="New password"><input type="text" value={pw} onChange={(e) => setPw(e.target.value)} minLength={8} required autoComplete="off" autoFocus /></Field>
       </div>
     </FormModal>
   )
