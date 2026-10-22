@@ -91,7 +91,7 @@ export default function Layout() {
         </aside>
         <div>
           <section className="hero"><div className="in">
-            <h1>AI-powered INTELLIGENT SUPPORT</h1>
+            <h1>AI-Powered Managed Services Support</h1>
           </div></section>
           <main className="content"><Outlet /></main>
         </div>
