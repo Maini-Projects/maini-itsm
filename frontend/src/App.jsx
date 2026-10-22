@@ -1,7 +1,7 @@
 import { Link, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './components/Layout'
-import { Loading } from './components/ui'
+import { PageLoading } from './components/ui'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import { IncidentDetail, IncidentList } from './pages/Incidents'
@@ -31,7 +31,7 @@ const NotFound = () => (
 
 export default function App() {
   const { state } = useAuth()
-  if (state === 'loading') return <Loading text="Signing you in…" />
+  if (state === 'loading') return <PageLoading />
   if (state === 'out') return <Login />
   const g = (area, el) => <Guard area={area}>{el}</Guard>
   return (

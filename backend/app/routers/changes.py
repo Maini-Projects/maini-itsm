@@ -26,7 +26,7 @@ Level = Literal["High", "Medium", "Low"]
 ChangeType = Literal["Standard", "Normal", "Emergency"]
 
 SELECT = """
-select c.id, c.number, c.title, c.type::text as type, c.risk::text as risk, c.status,
+select c.id, c.project_id, c.number, c.title, c.type::text as type, c.risk::text as risk, c.status,
        c.service_id, s.name as service_name, c.team_id, t.name as team_name,
        c.requester_id, rq.full_name as requester_name, c.requester_id as assignee_id,
        c.implementation_plan, c.test_plan, c.backout_plan, c.planned_start, c.planned_end,
@@ -40,7 +40,7 @@ join profiles rq on rq.id = c.requester_id
 
 def _vis(user: Principal) -> tuple[str, dict]:
     """Reading is open to the whole organisation; changing is limited by can_manage and staff_only."""
-    return "c.project_id = any(%(vis_proj)s)", {"vis_proj": user.project_ids}
+    return "true", {}
 
 
 def load(conn, user: Principal, change_id: UUID) -> dict:
@@ -76,16 +76,18 @@ def list_changes(
     q: str | None = Query(default=None, description="matches the number or the title"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    project_id: UUID | None = None,
     user: Principal = Depends(current_user),
     conn=Depends(get_conn),
 ):
     vis, vp = _vis(user)
     where = f"""{vis}
+        and (%(proj)s::uuid is null or c.project_id = %(proj)s)
         and (%(status)s::text is null or c.status = %(status)s)
         and (%(type)s::text is null or c.type::text = %(type)s)
         and (%(risk)s::text is null or c.risk::text = %(risk)s)
         and (%(q)s::text is null or c.number ilike %(q)s or c.title ilike %(q)s)"""
-    params = {**vp, "status": status, "type": type, "risk": risk, "q": f"%{q}%" if q else None,
+    params = {**vp, "proj": project_id, "status": status, "type": type, "risk": risk, "q": f"%{q}%" if q else None,
               "limit": limit, "offset": offset}
     total = fetch_one(conn, f"select count(*) as n from changes c where {where}", params)["n"]
     items = fetch_all(conn, SELECT + f" where {where} order by c.created_at desc, c.id limit %(limit)s offset %(offset)s",
@@ -142,10 +144,10 @@ def create_change(body: ChangeIn, user: Principal = Depends(staff_only), conn=De
     row = fetch_one(
         conn,
         """insert into changes(title, type, risk, service_id, implementation_plan, test_plan, backout_plan,
-                               planned_start, planned_end, requester_id, updated_by, project_id)
+                               planned_start, planned_end, requester_id, updated_by)
            values (%(title)s, %(type)s, %(risk)s, %(service_id)s, %(implementation_plan)s, %(test_plan)s,
-                   %(backout_plan)s, %(planned_start)s, %(planned_end)s, %(uid)s, %(uid)s, %(proj)s) returning id""",
-        {**body.model_dump(), "uid": user.id, "proj": user.project_id},
+                   %(backout_plan)s, %(planned_start)s, %(planned_end)s, %(uid)s, %(uid)s) returning id""",
+        {**body.model_dump(), "uid": user.id},
     )
     return _detail(conn, user, row["id"])
 

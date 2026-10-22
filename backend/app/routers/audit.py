@@ -48,6 +48,12 @@ def set_audit_settings(body: RetentionIn, user: Principal = Depends(require_role
     return {"retention_days": body.days, "choices": list(CHOICES), "default": DEFAULT_DAYS}
 
 
+# This customer's history plus the shared history of users and SLA targets
+LOG = """(select id, at, actor_id, action, table_name, record_id, old_values, new_values, 'c' as src from audit_log
+          union all
+          select id, at, actor_id, action, table_name, record_id, old_values, new_values, 'g' as src from public.audit_log
+           where table_name in ('profiles', 'sla_policies')) a"""
+
 # Fields that change on every edit and say nothing useful in the history
 NOISE = ("updated_at", "updated_by")
 
@@ -55,7 +61,7 @@ NOISE = ("updated_at", "updated_by")
 @router.get("/audit")
 def audit_log(
     table: Table | None = None,
-    record: str | None = Query(default=None, description="record number or email, e.g. INC-10001"),
+    record: str | None = Query(default=None, description="record number or email, e.g. INC-1"),
     action: Literal["INSERT", "UPDATE", "DELETE"] | None = None,
     actor_id: UUID | None = None,
     since: datetime | None = None,
@@ -75,18 +81,18 @@ def audit_log(
         and a.at >= now() - make_interval(days => %(days)s)"""
     params = {"table": table, "record": f"%{record}%" if record else None, "action": action, "actor": actor_id,
               "since": since, "until": until, "limit": limit, "offset": offset, "days": days, "noise": list(NOISE)}
-    total = fetch_one(conn, f"select count(*) as n from audit_log a where {where}", params)["n"]
+    total = fetch_one(conn, f"select count(*) as n from {LOG} where {where}", params)["n"]
     rows = fetch_all(
         conn,
-        f"""select a.id, a.at, a.action, a.table_name, a.record_id, p.full_name as actor_name,
+        f"""select a.src || a.id::text as uid, a.id, a.at, a.action, a.table_name, a.record_id, p.full_name as actor_name,
                    {RECORD} as record,
                    a.old_values ->> 'status' as old_status, a.new_values ->> 'status' as new_status,
                    case when a.action = 'UPDATE' then array(
                         select k from jsonb_object_keys(a.new_values) k
                          where k <> all(%(noise)s) and a.new_values -> k is distinct from a.old_values -> k
                          order by k) end as changed_fields
-              from audit_log a left join profiles p on p.id = a.actor_id
-             where {where} order by a.id desc limit %(limit)s offset %(offset)s""",
+              from {LOG} left join profiles p on p.id = a.actor_id
+             where {where} order by a.at desc, a.id desc limit %(limit)s offset %(offset)s""",
         params,
     )
     for r in rows:

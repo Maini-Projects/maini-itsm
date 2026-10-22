@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 
 import psycopg
+from app.tenant import provision, schema_name_for
 import pytest
 from psycopg.conninfo import make_conninfo
 
@@ -54,6 +55,12 @@ def db_conninfo():
             c.execute("insert into auth.users(id, email) values (%s, %s)", (IDS[key], f"{key}@test.local"))
             c.execute("insert into profiles(id, email, full_name, role, team_id) values (%s,%s,%s,%s,%s)",
                       (IDS[key], f"{key}@test.local", key.title(), role, team.get(team_name)))
+        # the first project is a customer with its own schema; tests read and write that schema by default
+        schema = schema_name_for("Test Customer", set())
+        c.execute("update projects set schema_name = %s where id = (select id from projects order by created_at limit 1)", (schema,))
+        with c.transaction():
+            provision(c, schema, c.execute("select id from projects order by created_at limit 1").fetchone()[0])
+        c.execute(f'alter database {name} set search_path to "{schema}", public')
         c.execute("""insert into user_projects(user_id, project_id)
                      select id, (select id from projects order by created_at limit 1) from profiles where role <> 'admin'""")
     yield conninfo

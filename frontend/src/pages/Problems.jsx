@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { ProjectFilter, useCustomers } from '../components/Customer'
 import NoteBox from '../components/NoteBox'
 import { urlParam,
   DetailTitle, FieldBar, statusField, Empty, ErrorBox, Field, FormModal, Loading, PRIORITIES, Pager, PersonSelect, Priority, RecordPicker, StatusBadge, Text, Timeline,
@@ -15,6 +16,8 @@ const LIMIT = 25
 
 export function ProblemList() {
   const { me } = useAuth()
+  const cust = useCustomers()
+  const [projectId, setProjectId] = useState('')
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState(urlParam('status'))
@@ -25,10 +28,10 @@ export function ProblemList() {
   const [creating, setCreating] = useState(sp.get('new') === '1')
   useEffect(() => { if (sp.get('new')) { sp.delete('new'); setSp(sp, { replace: true }) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const dq = useDebounced(q)
-  useEffect(() => setOffset(0), [dq, status, priority, openOnly])
+  useEffect(() => setOffset(0), [dq, status, priority, openOnly, projectId])
   const { data, error, loading } = useFetch(
-    () => api.get('/problems', { q: dq.trim(), status, priority, open_only: openOnly || undefined, limit: LIMIT, offset }),
-    [dq, status, priority, openOnly, offset],
+    () => api.get('/problems', { q: dq.trim(), status, priority, project_id: projectId || undefined, open_only: openOnly || undefined, limit: LIMIT, offset }),
+    [dq, status, priority, openOnly, projectId, offset],
   )
   return (
     <>
@@ -37,6 +40,7 @@ export function ProblemList() {
       <p className="sub">Investigate recurring incidents, root causes, workarounds and permanent fixes.{me.role === 'employee' && ' You see the problems you raised.'}</p>
       <div className="toolbar">
         <div className="filters">
+          <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search problems" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search problems" />
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
           <select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority"><option value="">All priorities</option>{[...PRIORITIES].reverse().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
@@ -47,11 +51,11 @@ export function ProblemList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Problem</th><th>Title</th><th>Application</th><th>Priority</th><th>Owner</th><th>Status</th><th>Related Incidents</th></tr></thead>
+          <thead><tr><th>Problem</th>{cust.multi && <th>Project</th>}<th>Title</th><th>Application</th><th>Priority</th><th>Owner</th><th>Status</th><th>Related Incidents</th></tr></thead>
           <tbody>
             {data?.items.map((p) => (
               <tr key={p.id}>
-                <td><Link className="link" to={`/problems/${p.id}`}>{p.number}</Link></td><td><b>{p.title}</b></td>
+                <td><Link className="link" to={`/problems/${p.id}`}>{p.number}</Link></td>{cust.multi && <td>{cust.of(p)}</td>}<td><b>{p.title}</b></td>
                 <td>{p.service_name || '—'}</td><td><Priority p={p.priority} /></td><td>{p.owner_name || '—'}</td>
                 <td><StatusBadge status={p.status} /></td><td>{p.related_incidents}</td>
               </tr>

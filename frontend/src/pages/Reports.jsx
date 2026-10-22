@@ -69,7 +69,7 @@ export function Reports() {
         </div>
       </div>
       <ErrorBox error={error} />
-      {loading && <Loading />}
+      {loading && <Loading variant="bars" />}
       <div className="reports">
         {items.map((r) => (
           <button key={r.key} className={`report ${r.available ? '' : 'off'}`} onClick={() => r.available && navigate(`/reports/${r.key}`)} aria-disabled={!r.available}>
@@ -98,7 +98,7 @@ function BarRecords({ chart, index, onClear }) {
         <button className="btn2" onClick={onClear}>Clear selection ✕</button>
       </div>
       <ErrorBox error={error} />
-      {loading && !data && <Loading />}
+      {loading && !data && <Loading variant="bars" />}
       {data && !rows.length && <Empty>Nothing matches this bar.</Empty>}
       {rows.length > 0 && (
         <table>
@@ -129,7 +129,7 @@ export function ReportView() {
     <>
       <Link to="/reports" className="back" style={{ display: 'inline-block' }}>‹ Back to reports</Link>
       <ErrorBox error={error} />
-      {loading && <Loading />}
+      {loading && <Loading variant="bars" />}
       {r && (
         <>
           <div className="eyebrow">{r.category}</div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { ProjectFilter, useCustomers } from '../components/Customer'
 import NoteBox from '../components/NoteBox'
 import { urlParam,
   DetailTitle, FieldBar, OpenFor, statusField, Badge, Empty, ErrorBox, Field, FormModal, Loading, Pager, PersonSelect, SeverityBadge, StatusBadge, Text,
@@ -18,6 +19,8 @@ const LIMIT = 25
 // ---- list ----------------------------------------------------------------------------------
 export function DefectList() {
   const { me } = useAuth()
+  const cust = useCustomers()
+  const [projectId, setProjectId] = useState('')
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [severity, setSeverity] = useState(urlParam('severity'))
@@ -31,11 +34,11 @@ export function DefectList() {
   useEffect(() => { if (sp.get('new')) { sp.delete('new'); setSp(sp, { replace: true }) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const dq = useDebounced(q)
   const teams = useFetch(() => (me.role === 'admin' ? api.get('/teams') : []), [me.role])
-  useEffect(() => setOffset(0), [dq, severity, environment, status, teamId, openOnly])
+  useEffect(() => setOffset(0), [dq, severity, environment, status, teamId, openOnly, projectId])
 
   const { data, error, loading } = useFetch(
-    () => api.get('/defects', { q: dq.trim(), severity, environment, status, team_id: teamId, open_only: openOnly || undefined, limit: LIMIT, offset }),
-    [dq, severity, environment, status, teamId, openOnly, offset],
+    () => api.get('/defects', { q: dq.trim(), severity, environment, status, team_id: teamId, project_id: projectId || undefined, open_only: openOnly || undefined, limit: LIMIT, offset }),
+    [dq, severity, environment, status, teamId, openOnly, projectId, offset],
   )
 
   const created = useRef(null)
@@ -51,6 +54,7 @@ export function DefectList() {
       <p className="sub">Log, assign, track, fix and close defects found in an application.{me.role === 'employee' && ' You see the defects you raised.'}</p>
       <div className="toolbar">
         <div className="filters">
+          <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search defects" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search defects" />
           <select value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Severity">
             <option value="">All severities</option>{SEVERITIES.map((s) => <option key={s}>{s}</option>)}
@@ -73,11 +77,11 @@ export function DefectList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Defect</th><th>Title</th><th>Application</th><th>Severity</th><th>Environment</th><th>Team</th><th>Assignee</th><th>Status</th></tr></thead>
+          <thead><tr><th>Defect</th>{cust.multi && <th>Project</th>}<th>Title</th><th>Application</th><th>Severity</th><th>Environment</th><th>Team</th><th>Assignee</th><th>Status</th></tr></thead>
           <tbody>
             {data?.items.map((d) => (
               <tr key={d.id}>
-                <td><Link className="link" to={`/defects/${d.id}`}>{d.number}</Link></td>
+                <td><Link className="link" to={`/defects/${d.id}`}>{d.number}</Link></td>{cust.multi && <td>{cust.of(d)}</td>}
                 <td><b>{d.title}</b></td>
                 <td>{d.service_name || '—'}</td><td><SeverityBadge severity={d.severity} /></td><td>{d.environment}</td>
                 <td>{d.team_name || '—'}</td><td>{d.assignee_name || '—'}</td><td><StatusBadge status={d.status} /></td>

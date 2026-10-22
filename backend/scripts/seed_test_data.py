@@ -112,7 +112,7 @@ for i in range(36):
     who = customers[i % len(customers)]
     key, proj = who[0], random.choice(who[5])
     inc = mk("incidents", "/incidents", key, proj,
-             {"short_description": f"{ISSUES[i % len(ISSUES)]} ({proj.split()[0]})", "description": "Test incident created by the seed script.",
+             {"short_description": ISSUES[i % len(ISSUES)], "description": "Test incident created by the seed script.",
               "priority": PRIORITIES[i % len(PRIORITIES)], "service_id": svc()})
     if not inc:
         continue

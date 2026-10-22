@@ -41,7 +41,7 @@ export default function Audit() {
       <p className="sub">Who changed what, and when. This log is written by the database itself and cannot be edited. Only entries from the selected period are shown.</p>
       <div className="toolbar">
         <div className="filters">
-          <input placeholder="Record, e.g. INC-10001" value={record} onChange={(e) => setRecord(e.target.value)} aria-label="Record number" />
+          <input placeholder="Record, e.g. INC-1" value={record} onChange={(e) => setRecord(e.target.value)} aria-label="Record number" />
           <select value={table} onChange={(e) => setTable(e.target.value)} aria-label="Type"><option value="">All record types</option>{TABLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           <select value={action} onChange={(e) => setAction(e.target.value)} aria-label="Action"><option value="">All actions</option><option value="INSERT">Created</option><option value="UPDATE">Updated</option><option value="DELETE">Deleted</option></select>
           <select value={actor} onChange={(e) => setActor(e.target.value)} aria-label="User"><option value="">All users</option>{(users.data || []).map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}</select>
@@ -61,7 +61,7 @@ export default function Audit() {
             {data?.items.map((r) => {
               const [prev, next] = change(r)
               return (
-                <tr key={r.id}>
+                <tr key={r.uid}>
                   <td>{fmtDate(r.at)}</td><td>{r.actor_name || 'System'}</td><td>{r.summary}</td><td>{r.record || '—'}</td><td>{prev || '—'}</td><td>{next || '—'}</td>
                 </tr>
               )

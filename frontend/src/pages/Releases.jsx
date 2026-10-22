@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { ProjectFilter, useCustomers } from '../components/Customer'
 import NoteBox from '../components/NoteBox'
 import ApprovalBox from '../components/ApprovalBox'
 import { urlParam,
@@ -16,6 +17,8 @@ const LIMIT = 25
 
 export function ReleaseList() {
   const { me } = useAuth()
+  const cust = useCustomers()
+  const [projectId, setProjectId] = useState('')
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [environment, setEnvironment] = useState(urlParam('environment'))
@@ -25,8 +28,8 @@ export function ReleaseList() {
   const [creating, setCreating] = useState(sp.get('new') === '1' && me.role !== 'employee')
   useEffect(() => { if (sp.get('new')) { sp.delete('new'); setSp(sp, { replace: true }) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const dq = useDebounced(q)
-  useEffect(() => setOffset(0), [dq, environment, status])
-  const { data, error, loading } = useFetch(() => api.get('/releases', { q: dq.trim(), environment, status, limit: LIMIT, offset }), [dq, environment, status, offset])
+  useEffect(() => setOffset(0), [dq, environment, status, projectId])
+  const { data, error, loading } = useFetch(() => api.get('/releases', { q: dq.trim(), environment, status, project_id: projectId || undefined, limit: LIMIT, offset }), [dq, environment, status, projectId, offset])
   return (
     <>
       <div className="eyebrow">Release Management <CountPill of="releases" /></div>
@@ -34,6 +37,7 @@ export function ReleaseList() {
       <p className="sub">Plan releases, group changes and track approval, deployment and validation. Support Engineers raise releases; an Administrator approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
         <div className="filters">
+          <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search releases" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search releases" />
           <select value={environment} onChange={(e) => setEnvironment(e.target.value)} aria-label="Environment"><option value="">All environments</option><option>Production</option><option>UAT</option></select>
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
@@ -43,11 +47,11 @@ export function ReleaseList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Release</th><th>Name</th><th>Application</th><th>Owner</th><th>Environment</th><th>Status</th><th>Deployment</th></tr></thead>
+          <thead><tr><th>Release</th>{cust.multi && <th>Project</th>}<th>Name</th><th>Application</th><th>Owner</th><th>Environment</th><th>Status</th><th>Deployment</th></tr></thead>
           <tbody>
             {data?.items.map((r) => (
               <tr key={r.id}>
-                <td><Link className="link" to={`/releases/${r.id}`}>{r.number}</Link></td><td><b>{r.name}</b></td><td>{r.service_name || '—'}</td>
+                <td><Link className="link" to={`/releases/${r.id}`}>{r.number}</Link></td>{cust.multi && <td>{cust.of(r)}</td>}<td><b>{r.name}</b></td><td>{r.service_name || '—'}</td>
                 <td>{r.owner_name}</td><td>{r.environment}</td><td><StatusBadge status={r.status} /></td><td>{fmtShort(r.deployment_at)}</td>
               </tr>
             ))}

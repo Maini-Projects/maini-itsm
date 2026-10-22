@@ -33,16 +33,12 @@ left join releases  r on a.record_type = 'release'  and r.id = a.record_id
 """
 
 
-# An approval belongs to the project of the record it is about
-APPROVAL_PROJECT = "coalesce(i.project_id, c.project_id, r.project_id) = any(%(proj)s)"
-
-
 def _scope(user: Principal) -> tuple[str, dict]:
     """Admins see every approval; managers see their own requests (and any old team incident approvals kept as history)."""
     if user.role == "admin":
-        return APPROVAL_PROJECT, {"proj": user.project_ids}
-    return (f"{APPROVAL_PROJECT} and ((a.approver_role = 'manager' and a.team_id = %(team)s) or a.requested_by = %(me)s)",
-            {"team": user.team_id, "me": user.id, "proj": user.project_ids})
+        return "true", {}
+    return ("((a.approver_role = 'manager' and a.team_id = %(team)s) or a.requested_by = %(me)s)",
+            {"team": user.team_id, "me": user.id})
 
 
 def _decorate(user: Principal, row: dict) -> dict:

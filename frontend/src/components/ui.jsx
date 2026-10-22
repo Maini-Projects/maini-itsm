@@ -102,7 +102,22 @@ export function useFetch(fn, deps = []) {
   return { ...state, reload: run }
 }
 
-export const Loading = ({ text = 'Loading…' }) => <div className="loading">{text}</div>
+// Content loading: concentric rings (variant "bars" = equalizer bars, used on the reports)
+export const Loading = ({ text = 'Loading', variant = 'rings' }) => (
+  <div className="loading" role="status" aria-live="polite">
+    {variant === 'bars'
+      ? <span className="eq" aria-hidden="true"><i /><i /><i /><i /><i /></span>
+      : <span className="spinner" aria-hidden="true"><i /><i /><i /></span>}
+    <span className="loading-text">{text.replace(/…$/, '')}<b>.</b><b>.</b><b>.</b></span>
+  </div>
+)
+
+// Full-page wait (signing in)
+export const PageLoading = ({ text = 'Signing you in' }) => <div className="page-loading"><Loading text={text} /></div>
+
+// Small bouncing dots for buttons that are working
+export const Dots = () => <span className="dots" aria-hidden="true"><i /><i /><i /></span>
+
 export const ErrorBox = ({ error }) => (error ? <div className="errorbox">{error.message || String(error)}</div> : null)
 export const Empty = ({ children }) => <div className="empty">{children}</div>
 
@@ -166,7 +181,7 @@ export function FormModal({ title, submitLabel = 'Save', onClose, onSubmit, chil
         {error && <div className="formerror">{error}</div>}
         <div className="mfoot">
           <button type="button" className="btn2" onClick={onClose}>Cancel</button>
-          <button type="submit" className={danger ? 'danger' : 'btn'} disabled={busy}>{busy ? 'Working…' : submitLabel}</button>
+          <button type="submit" className={danger ? 'danger' : 'btn'} disabled={busy}>{busy ? <Dots /> : submitLabel}</button>
         </div>
       </form>
     </Modal>

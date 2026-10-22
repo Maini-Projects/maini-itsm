@@ -41,6 +41,9 @@ def get_conn() -> Iterator[Connection]:
     """FastAPI dependency: one transaction per request."""
     with transaction() as conn:
         yield conn
+        if getattr(conn, "multi_views", False):
+            from .tenant import drop_multi_views  # temporary views must not outlive the request
+            drop_multi_views(conn)
 
 
 def fetch_all(conn: Connection, sql: str, params: dict[str, Any] | None = None) -> list[dict]:

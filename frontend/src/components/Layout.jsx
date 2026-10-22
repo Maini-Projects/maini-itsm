@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import ProjectPicker from './ProjectPicker'
 import { roleLabel } from './ui'
+import ProjectPicker from './ProjectPicker'
 
 const SECTIONS = [
   { title: 'Service Management', items: [['incidents', 'Incidents'], ['problems', 'Problems'], ['defects', 'Defects'], ['changes', 'Changes'], ['releases', 'Releases']] },
@@ -13,7 +13,7 @@ const SECTIONS = [
 ]
 
 export default function Layout() {
-  const { me, signOut, refreshCounts } = useAuth()
+  const { me, signOut, refreshCounts, reloadMe } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false) // small screens: the slide-in menu
@@ -24,11 +24,14 @@ export default function Layout() {
   const activeIds = me.active_project_ids || []
   const [picked, setPicked] = useState(activeIds)
   useEffect(() => setPicked(me.active_project_ids || []), [me.active_project_ids])
-  const applyProjects = () => {
+  const applyProjects = async () => {
     const next = picked.length ? picked : me.projects.map((p) => p.id) // at least one project stays selected
     if (next.length === activeIds.length && next.every((id) => activeIds.includes(id))) { setPicked(activeIds); return }
     try { localStorage.setItem('itsm.project', next.join(',')) } catch { /* not remembered */ }
-    window.location.assign('/') // reload so every screen shows the chosen projects' data
+    const parts = location.pathname.split('/')
+    if (parts.length > 2 && parts[1] !== 'reports') navigate(`/${parts[1]}`) // a record page -> its list
+    await reloadMe() // the page below remounts and loads the chosen projects' data
+    refreshCounts()
   }
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
@@ -104,7 +107,7 @@ export default function Layout() {
           <section className="hero"><div className="in">
             <h1>AI-Powered Managed Services Support</h1>
           </div></section>
-          <main className="content"><Outlet /></main>
+          <main className="content" key={(me.active_project_ids || []).join(',')}><Outlet /></main>
         </div>
       </div>
     </>

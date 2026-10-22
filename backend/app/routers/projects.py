@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from ..db import fetch_all, fetch_one, get_conn
 from ..errors import api_error
 from ..rbac import Principal, current_user, require_roles
+from ..tenant import provision, schema_name_for, use_schema
 
 router = APIRouter(tags=["projects"])
 
@@ -29,11 +30,20 @@ class ProjectIn(BaseModel):
 
 
 @router.post("/projects", status_code=201)
-def create_project(body: ProjectIn, _: Principal = Depends(require_roles("admin")), conn=Depends(get_conn)):
+def create_project(body: ProjectIn, actor: Principal = Depends(require_roles("admin")), conn=Depends(get_conn)):
     name = body.name.strip()
     if fetch_one(conn, "select 1 as x from projects where lower(name) = lower(%(n)s)", {"n": name}):
         raise api_error(409, "project_exists", "A project with that name already exists.")
-    return fetch_one(conn, "insert into projects(name) values (%(n)s) returning id, name", {"n": name})
+    taken = {r["schema_name"] for r in fetch_all(conn, "select schema_name from projects where schema_name is not null")}
+    schema = schema_name_for(name, taken)
+    project = fetch_one(conn, "insert into projects(name, schema_name) values (%(n)s, %(s)s) returning id, name",
+                        {"n": name, "s": schema})
+    provision(conn, schema, project["id"])  # the customer's own set of tables, created right now
+    if actor.schema_name:  # back to the customer this request started in
+        use_schema(conn, actor.schema_name)
+    else:
+        conn.execute("select set_config('search_path', 'public', true)")
+    return project
 
 
 class AssignIn(BaseModel):

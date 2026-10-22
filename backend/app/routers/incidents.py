@@ -29,7 +29,7 @@ PRIORITY_LEVELS = {"P1": ("High", "High"), "P2": ("High", "Medium"), "P3": ("Med
 NOT_OPEN = "('Resolved','Closed')"  # work finished
 
 SELECT = f"""
-select i.id, i.number, i.short_description, i.description, i.status, i.priority, i.impact, i.urgency,
+select i.id, i.project_id, i.number, i.short_description, i.description, i.status, i.priority, i.impact, i.urgency,
        i.major_incident, i.resolution_notes,
        i.service_id, s.name as service_name,
        i.team_id, t.name as team_name,
@@ -71,11 +71,13 @@ def list_incidents(
     open_only: bool = False,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    project_id: UUID | None = None,
     user: Principal = Depends(current_user),
     conn=Depends(get_conn),
 ):
     vis, vp = visibility(user)
     where = f"""{vis}
+        and (%(proj)s::uuid is null or i.project_id = %(proj)s)
         and (%(status)s::text is null or i.status = %(status)s)
         and (%(priority)s::text is null or i.priority::text = %(priority)s)
         and (%(team)s::uuid is null or i.team_id = %(team)s)
@@ -84,7 +86,7 @@ def list_incidents(
         and (%(q)s::text is null or i.number ilike %(q)s or i.short_description ilike %(q)s)
         and (not %(mine)s or i.requester_id = %(me)s or i.assignee_id = %(me)s)
         and (not %(open_only)s or i.status not in {NOT_OPEN})"""
-    params = {**vp, "status": status, "priority": priority, "team": team_id, "assignee": assignee_id,
+    params = {**vp, "proj": project_id, "status": status, "priority": priority, "team": team_id, "assignee": assignee_id,
               "service": service_id, "q": f"%{q}%" if q else None, "mine": mine, "me": user.id,
               "open_only": open_only, "limit": limit, "offset": offset}
     total = fetch_one(conn, f"select count(*) as n from incidents i where {where}", params)["n"]
@@ -134,10 +136,10 @@ def create_incident(body: IncidentIn, user: Principal = Depends(current_user), c
     impact, urgency = PRIORITY_LEVELS[body.priority] if body.priority else (body.impact or "Medium", body.urgency or "Medium")
     row = fetch_one(
         conn,
-        """insert into incidents(short_description, description, service_id, impact, urgency, requester_id, updated_by, project_id)
-           values (%(sd)s, %(d)s, %(svc)s, %(imp)s, %(urg)s, %(req)s, %(uid)s, %(proj)s) returning id""",
+        """insert into incidents(short_description, description, service_id, impact, urgency, requester_id, updated_by)
+           values (%(sd)s, %(d)s, %(svc)s, %(imp)s, %(urg)s, %(req)s, %(uid)s) returning id""",
         {"sd": body.short_description, "d": body.description, "svc": body.service_id, "imp": impact,
-         "urg": urgency, "req": requester, "uid": user.id, "proj": user.project_id},
+         "urg": urgency, "req": requester, "uid": user.id},
     )
     return load(conn, user, row["id"])
 

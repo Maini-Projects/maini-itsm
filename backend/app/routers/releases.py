@@ -25,7 +25,7 @@ staff_only = require_roles("admin", "manager")
 Environment = Literal["Production", "UAT"]
 
 SELECT = """
-select r.id, r.number, r.name, r.environment::text as environment, r.status,
+select r.id, r.project_id, r.number, r.name, r.environment::text as environment, r.status,
        r.service_id, s.name as service_name, r.team_id, t.name as team_name,
        r.owner_id, ow.full_name as owner_name, r.owner_id as assignee_id,
        r.scope, r.rollback_plan, r.deployment_at, r.created_at, r.updated_at
@@ -38,7 +38,7 @@ join profiles ow on ow.id = r.owner_id
 
 def _vis(user: Principal) -> tuple[str, dict]:
     """Reading is open to the whole organisation; changing is limited by can_manage and staff_only."""
-    return "r.project_id = any(%(vis_proj)s)", {"vis_proj": user.project_ids}
+    return "true", {}
 
 
 def load(conn, user: Principal, release_id: UUID) -> dict:
@@ -74,15 +74,17 @@ def list_releases(
     q: str | None = Query(default=None, description="matches the number or the name"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    project_id: UUID | None = None,
     user: Principal = Depends(current_user),
     conn=Depends(get_conn),
 ):
     vis, vp = _vis(user)
     where = f"""{vis}
+        and (%(proj)s::uuid is null or r.project_id = %(proj)s)
         and (%(status)s::text is null or r.status = %(status)s)
         and (%(env)s::text is null or r.environment::text = %(env)s)
         and (%(q)s::text is null or r.number ilike %(q)s or r.name ilike %(q)s)"""
-    params = {**vp, "status": status, "env": environment, "q": f"%{q}%" if q else None,
+    params = {**vp, "proj": project_id, "status": status, "env": environment, "q": f"%{q}%" if q else None,
               "limit": limit, "offset": offset}
     total = fetch_one(conn, f"select count(*) as n from releases r where {where}", params)["n"]
     items = fetch_all(conn, SELECT + f" where {where} order by r.created_at desc, r.id limit %(limit)s offset %(offset)s",
@@ -126,10 +128,10 @@ class ReleasePatch(BaseModel):
 def create_release(body: ReleaseIn, user: Principal = Depends(staff_only), conn=Depends(get_conn)):
     row = fetch_one(
         conn,
-        """insert into releases(name, environment, service_id, scope, rollback_plan, deployment_at, owner_id, updated_by, project_id)
+        """insert into releases(name, environment, service_id, scope, rollback_plan, deployment_at, owner_id, updated_by)
            values (%(name)s, %(environment)s, %(service_id)s, %(scope)s, %(rollback_plan)s, %(deployment_at)s,
-                   %(uid)s, %(uid)s, %(proj)s) returning id""",
-        {**body.model_dump(), "uid": user.id, "proj": user.project_id},
+                   %(uid)s, %(uid)s) returning id""",
+        {**body.model_dump(), "uid": user.id},
     )
     return _detail(conn, user, row["id"])
 

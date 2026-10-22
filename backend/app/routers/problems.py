@@ -22,7 +22,7 @@ Priority = Literal["P1", "P2", "P3", "P4"]
 FINISHED = "('Resolved','Closed')"
 
 SELECT = """
-select p.id, p.number, p.title, p.description, p.status, p.priority::text as priority,
+select p.id, p.project_id, p.number, p.title, p.description, p.status, p.priority::text as priority,
        p.service_id, s.name as service_name, p.team_id, t.name as team_name,
        p.raised_by, rb.full_name as raised_by_name,
        p.owner_id, ow.full_name as owner_name, p.owner_id as assignee_id,
@@ -77,16 +77,18 @@ def list_problems(
     open_only: bool = False,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    project_id: UUID | None = None,
     user: Principal = Depends(current_user),
     conn=Depends(get_conn),
 ):
     vis, vp = _vis(user)
     where = f"""{vis}
+        and (%(proj)s::uuid is null or p.project_id = %(proj)s)
         and (%(status)s::text is null or p.status = %(status)s)
         and (%(priority)s::text is null or p.priority::text = %(priority)s)
         and (%(q)s::text is null or p.number ilike %(q)s or p.title ilike %(q)s)
         and (not %(open_only)s or p.status not in {FINISHED})"""
-    params = {**vp, "status": status, "priority": priority, "q": f"%{q}%" if q else None,
+    params = {**vp, "proj": project_id, "status": status, "priority": priority, "q": f"%{q}%" if q else None,
               "open_only": open_only, "limit": limit, "offset": offset}
     total = fetch_one(conn, f"select count(*) as n from problems p where {where}", params)["n"]
     items = fetch_all(conn, SELECT + f" where {where} order by p.created_at desc, p.id limit %(limit)s offset %(offset)s",
@@ -135,9 +137,9 @@ def create_problem(body: ProblemIn, user: Principal = Depends(current_user), con
         raise api_error(403, "forbidden", "Only staff can set the priority of a problem.")
     row = fetch_one(
         conn,
-        """insert into problems(title, description, service_id, priority, raised_by, updated_by, project_id)
-           values (%(t)s, %(d)s, %(svc)s, coalesce(%(p)s::priority_level, 'P3'), %(uid)s, %(uid)s, %(proj)s) returning id""",
-        {"t": body.title, "d": body.description, "svc": body.service_id, "p": body.priority, "uid": user.id, "proj": user.project_id},
+        """insert into problems(title, description, service_id, priority, raised_by, updated_by)
+           values (%(t)s, %(d)s, %(svc)s, coalesce(%(p)s::priority_level, 'P3'), %(uid)s, %(uid)s) returning id""",
+        {"t": body.title, "d": body.description, "svc": body.service_id, "p": body.priority, "uid": user.id},
     )
     return _detail(conn, user, row["id"])
 

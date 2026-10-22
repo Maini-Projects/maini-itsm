@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { ProjectFilter, useCustomers } from '../components/Customer'
 import NoteBox from '../components/NoteBox'
 import ApprovalBox from '../components/ApprovalBox'
 import { urlParam,
@@ -18,6 +19,8 @@ const LIMIT = 25
 
 export function ChangeList() {
   const { me } = useAuth()
+  const cust = useCustomers()
+  const [projectId, setProjectId] = useState('')
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [type, setType] = useState(urlParam('type'))
@@ -28,8 +31,8 @@ export function ChangeList() {
   const [creating, setCreating] = useState(sp.get('new') === '1' && me.role !== 'employee')
   useEffect(() => { if (sp.get('new')) { sp.delete('new'); setSp(sp, { replace: true }) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const dq = useDebounced(q)
-  useEffect(() => setOffset(0), [dq, type, status, risk])
-  const { data, error, loading } = useFetch(() => api.get('/changes', { q: dq.trim(), type, status, risk, limit: LIMIT, offset }), [dq, type, status, risk, offset])
+  useEffect(() => setOffset(0), [dq, type, status, risk, projectId])
+  const { data, error, loading } = useFetch(() => api.get('/changes', { q: dq.trim(), type, status, risk, project_id: projectId || undefined, limit: LIMIT, offset }), [dq, type, status, risk, projectId, offset])
   return (
     <>
       <div className="eyebrow">Change Management <CountPill of="changes" /></div>
@@ -37,6 +40,7 @@ export function ChangeList() {
       <p className="sub">Standard, normal and emergency changes with risk, approval and scheduling. Support Engineers raise changes; an Administrator approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
         <div className="filters">
+          <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search changes" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search changes" />
           <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Type"><option value="">All types</option>{TYPES.map((t) => <option key={t}>{t}</option>)}</select>
           <select value={risk} onChange={(e) => setRisk(e.target.value)} aria-label="Risk"><option value="">All risks</option>{LEVELS.map((t) => <option key={t}>{t}</option>)}</select>
@@ -47,11 +51,11 @@ export function ChangeList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Change</th><th>Title</th><th>Type</th><th>Application</th><th>Requester</th><th>Risk</th><th>Status</th><th>Planned Start</th></tr></thead>
+          <thead><tr><th>Change</th>{cust.multi && <th>Project</th>}<th>Title</th><th>Type</th><th>Application</th><th>Requester</th><th>Risk</th><th>Status</th><th>Planned Start</th></tr></thead>
           <tbody>
             {data?.items.map((c) => (
               <tr key={c.id}>
-                <td><Link className="link" to={`/changes/${c.id}`}>{c.number}</Link></td><td><b>{c.title}</b></td>
+                <td><Link className="link" to={`/changes/${c.id}`}>{c.number}</Link></td>{cust.multi && <td>{cust.of(c)}</td>}<td><b>{c.title}</b></td>
                 <td>{c.type === 'Emergency' ? <Badge tone="red">Emergency</Badge> : c.type}</td><td>{c.service_name || '—'}</td>
                 <td>{c.requester_name}</td><td><RiskBadge risk={c.risk} /></td><td><StatusBadge status={c.status} /></td><td>{fmtShort(c.planned_start)}</td>
               </tr>

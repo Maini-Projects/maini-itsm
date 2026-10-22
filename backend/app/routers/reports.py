@@ -185,11 +185,6 @@ def pending_approvals(conn, user):
         where, params = "true", {}
     else:
         where, params = "a.approver_role = 'manager' and a.team_id = %(team)s", {"team": user.team_id}
-    where += """ and exists (select 1 from (
-            select id, project_id from incidents union all select id, project_id from changes
-            union all select id, project_id from releases) rec
-          where rec.id = a.record_id and rec.project_id = any(%(proj)s))"""
-    params["proj"] = user.project_ids
     rows = fetch_all(
         conn,
         f"""select a.record_number, a.record_type::text as record_type, a.approver_role::text as approver_role,

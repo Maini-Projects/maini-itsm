@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { ProjectFilter, useCustomers } from '../components/Customer'
 import NoteBox from '../components/NoteBox'
 import { urlParam,
   DetailTitle, FieldBar, statusField, Badge, Empty, ErrorBox, Field, FormModal, Loading, OpenFor, PRIORITIES, Pager, PersonSelect, Priority, StatusBadge, Text,
@@ -16,6 +17,8 @@ const LIMIT = 25
 // ---- list ----------------------------------------------------------------------------------
 export function IncidentList() {
   const { me } = useAuth()
+  const cust = useCustomers()
+  const [projectId, setProjectId] = useState('')
   const navigate = useNavigate()
   const [sp, setSp] = useSearchParams()
   const [q, setQ] = useState(sp.get('q') || '')
@@ -30,11 +33,11 @@ export function IncidentList() {
   const teams = useFetch(() => (me.role === 'admin' ? api.get('/teams') : []), [me.role])
 
   useEffect(() => { setQ(sp.get('q') || '') }, [sp])
-  useEffect(() => setOffset(0), [dq, priority, status, teamId, openOnly, serviceId])
+  useEffect(() => setOffset(0), [dq, priority, status, teamId, openOnly, serviceId, projectId])
 
   const { data, error, loading } = useFetch(
-    () => api.get('/incidents', { q: dq.trim(), priority, status, team_id: teamId, service_id: serviceId || undefined, open_only: openOnly || undefined, limit: LIMIT, offset }),
-    [dq, priority, status, teamId, openOnly, serviceId, offset],
+    () => api.get('/incidents', { q: dq.trim(), priority, status, team_id: teamId, service_id: serviceId || undefined, project_id: projectId || undefined, open_only: openOnly || undefined, limit: LIMIT, offset }),
+    [dq, priority, status, teamId, openOnly, serviceId, projectId, offset],
   )
 
   const created = useRef(null)
@@ -51,6 +54,7 @@ export function IncidentList() {
       <p className="sub">Create, assign, monitor, resolve and close operational incidents.{me.role === 'employee' && ' You see the incidents you raised.'}</p>
       <div className="toolbar">
         <div className="filters">
+          <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search incidents" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search incidents" />
           <select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority">
             <option value="">All priorities</option>{[...PRIORITIES].reverse().map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -73,11 +77,11 @@ export function IncidentList() {
       <ErrorBox error={error} />
       <div className="card table">
         <table>
-          <thead><tr><th>Incident</th><th>Short Description</th><th>Application</th><th>Priority</th><th>Team</th><th>Assignee</th><th>Status</th><th>Open For</th></tr></thead>
+          <thead><tr><th>Incident</th>{cust.multi && <th>Project</th>}<th>Short Description</th><th>Application</th><th>Priority</th><th>Team</th><th>Assignee</th><th>Status</th><th>Open For</th></tr></thead>
           <tbody>
             {data?.items.map((i) => (
               <tr key={i.id}>
-                <td><Link className="link" to={`/incidents/${i.id}`}>{i.number}</Link></td>
+                <td><Link className="link" to={`/incidents/${i.id}`}>{i.number}</Link></td>{cust.multi && <td>{cust.of(i)}</td>}
                 <td><b>{i.short_description}</b></td>
                 <td>{i.service_name || '—'}</td><td><Priority p={i.priority} /></td><td>{i.team_name || '—'}</td>
                 <td>{i.assignee_name || '—'}</td><td><StatusBadge status={i.status} /></td><td><OpenFor inc={i} /></td>

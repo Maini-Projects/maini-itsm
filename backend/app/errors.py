@@ -62,5 +62,7 @@ def register_error_handlers(app: FastAPI) -> None:
             return _envelope(422, "invalid_reference", "A referenced record does not exist.")
         if isinstance(exc, (pgerr.CheckViolation, pgerr.NotNullViolation, pgerr.InvalidTextRepresentation)):
             return _envelope(422, "invalid_value", "A value is missing or not allowed.")
+        if isinstance(exc, pgerr.UndefinedTable):
+            return _envelope(403, "no_project", "You are not assigned to a project yet. Ask an Administrator.")
         log.exception("database error")
         return _envelope(500, "database_error", "The database could not complete the request.")

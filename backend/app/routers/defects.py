@@ -25,7 +25,7 @@ Environment = Literal["Production", "UAT"]
 NOT_OPEN = "('Resolved','Closed')"  # work finished
 
 SELECT = """
-select d.id, d.number, d.title, d.description, d.steps_to_reproduce, d.expected_result, d.actual_result,
+select d.id, d.project_id, d.number, d.title, d.description, d.steps_to_reproduce, d.expected_result, d.actual_result,
        d.status, d.severity::text as severity, d.environment::text as environment, d.resolution_notes,
        d.service_id, s.name as service_name,
        d.team_id, t.name as team_name,
@@ -68,11 +68,13 @@ def list_defects(
     open_only: bool = False,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    project_id: UUID | None = None,
     user: Principal = Depends(current_user),
     conn=Depends(get_conn),
 ):
     vis, vp = _vis(user)
     where = f"""{vis}
+        and (%(proj)s::uuid is null or d.project_id = %(proj)s)
         and (%(status)s::text is null or d.status = %(status)s)
         and (%(severity)s::text is null or d.severity::text = %(severity)s)
         and (%(env)s::text is null or d.environment::text = %(env)s)
@@ -82,7 +84,7 @@ def list_defects(
         and (%(q)s::text is null or d.number ilike %(q)s or d.title ilike %(q)s)
         and (not %(mine)s or d.raised_by = %(me)s or d.assignee_id = %(me)s)
         and (not %(open_only)s or d.status not in {NOT_OPEN})"""
-    params = {**vp, "status": status, "severity": severity, "env": environment, "team": team_id,
+    params = {**vp, "proj": project_id, "status": status, "severity": severity, "env": environment, "team": team_id,
               "assignee": assignee_id, "service": service_id, "q": f"%{q}%" if q else None, "mine": mine,
               "me": user.id, "open_only": open_only, "limit": limit, "offset": offset}
     total = fetch_one(conn, f"select count(*) as n from defects d where {where}", params)["n"]
@@ -131,10 +133,10 @@ def create_defect(body: DefectIn, user: Principal = Depends(current_user), conn=
     row = fetch_one(
         conn,
         """insert into defects(title, description, steps_to_reproduce, expected_result, actual_result, service_id,
-                               severity, environment, raised_by, updated_by, project_id)
+                               severity, environment, raised_by, updated_by)
            values (%(title)s, %(description)s, %(steps_to_reproduce)s, %(expected_result)s, %(actual_result)s,
-                   %(service_id)s, %(severity)s, %(environment)s, %(uid)s, %(uid)s, %(proj)s) returning id""",
-        {**body.model_dump(), "uid": user.id, "proj": user.project_id},
+                   %(service_id)s, %(severity)s, %(environment)s, %(uid)s, %(uid)s) returning id""",
+        {**body.model_dump(), "uid": user.id},
     )
     d = load(conn, user, row["id"])
     d["can_manage"] = can_manage(user, d)
