@@ -4,7 +4,7 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 import NoteBox from '../components/NoteBox'
 import ApprovalBox from '../components/ApprovalBox'
-import {
+import { urlParam,
   DetailTitle, FieldBar, statusField, Empty, ErrorBox, Field, FormModal, Loading, Pager, RecordPicker, RiskBadge, StatusBadge, Text, Timeline, Workflow, fmtDate,
   fmtShort, fromInputDate, toInputDate, useAction, useDebounced, useFetch,
   useTab,
@@ -18,8 +18,8 @@ export function ReleaseList() {
   const { me } = useAuth()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
-  const [environment, setEnvironment] = useState('')
-  const [status, setStatus] = useState('')
+  const [environment, setEnvironment] = useState(urlParam('environment'))
+  const [status, setStatus] = useState(urlParam('status'))
   const [offset, setOffset] = useState(0)
   const [sp, setSp] = useSearchParams()
   const [creating, setCreating] = useState(sp.get('new') === '1' && me.role !== 'employee')

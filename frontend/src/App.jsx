@@ -15,6 +15,7 @@ import { ReportView, Reports } from './pages/Reports'
 import Audit from './pages/Audit'
 import Admin from './pages/Admin'
 import Account from './pages/Account'
+import Projects from './pages/Projects'
 
 function Guard({ area, children }) {
   const { me } = useAuth()
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="reports/:key" element={g('reports', <ReportView />)} />
         <Route path="audit" element={g('audit', <Audit />)} />
         <Route path="admin" element={g('admin', <Admin />)} />
+        <Route path="projects" element={g('projects', <Projects />)} />
         <Route path="account" element={<Account />} />
         <Route path="*" element={<NotFound />} />
       </Route>

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import NoteBox from '../components/NoteBox'
-import {
+import { urlParam,
   DetailTitle, FieldBar, OpenFor, statusField, Badge, Empty, ErrorBox, Field, FormModal, Loading, Pager, PersonSelect, SeverityBadge, StatusBadge, Text,
   Timeline, Workflow, fmtDate, useAction, useDebounced, useFetch,
   useTab,
@@ -20,11 +20,11 @@ export function DefectList() {
   const { me } = useAuth()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
-  const [severity, setSeverity] = useState('')
-  const [environment, setEnvironment] = useState('')
-  const [status, setStatus] = useState('')
+  const [severity, setSeverity] = useState(urlParam('severity'))
+  const [environment, setEnvironment] = useState(urlParam('environment'))
+  const [status, setStatus] = useState(urlParam('status'))
   const [teamId, setTeamId] = useState('')
-  const [openOnly, setOpenOnly] = useState(false)
+  const [openOnly, setOpenOnly] = useState(urlParam('open_only') === '1')
   const [offset, setOffset] = useState(0)
   const [sp, setSp] = useSearchParams()
   const [creating, setCreating] = useState(sp.get('new') === '1')

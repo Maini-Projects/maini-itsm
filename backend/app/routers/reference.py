@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from ..db import fetch_all, fetch_one, get_conn
 from ..errors import api_error
 from ..rbac import Principal, current_user, require_roles
+from .projects import projects_for
 
 router = APIRouter(tags=["reference"])
 
@@ -19,14 +20,16 @@ def me(user: Principal = Depends(current_user), conn=Depends(get_conn)):
     menus = {
         "employee": ["dashboard", "incidents", "problems", "defects", "changes", "releases"],
         "manager": ["dashboard", "incidents", "problems", "defects", "changes", "releases", "approvals", "services",
-                    "reports"],
+                    "reports", "projects"],
         "admin": ["dashboard", "incidents", "problems", "defects", "changes", "releases", "approvals", "services", "sla",
-                  "reports", "audit", "admin"],
+                  "reports", "audit", "admin", "projects"],
     }
     return {
         **user.model_dump(),
         "team_name": team["name"] if team else None,
         "organization_name": org["value"] if org else None,
+        "projects": projects_for(conn, user),
+        "active_project_ids": user.project_ids,
         "menu": menus[user.role],
     }
 

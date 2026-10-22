@@ -134,10 +134,10 @@ def create_incident(body: IncidentIn, user: Principal = Depends(current_user), c
     impact, urgency = PRIORITY_LEVELS[body.priority] if body.priority else (body.impact or "Medium", body.urgency or "Medium")
     row = fetch_one(
         conn,
-        """insert into incidents(short_description, description, service_id, impact, urgency, requester_id, updated_by)
-           values (%(sd)s, %(d)s, %(svc)s, %(imp)s, %(urg)s, %(req)s, %(uid)s) returning id""",
+        """insert into incidents(short_description, description, service_id, impact, urgency, requester_id, updated_by, project_id)
+           values (%(sd)s, %(d)s, %(svc)s, %(imp)s, %(urg)s, %(req)s, %(uid)s, %(proj)s) returning id""",
         {"sd": body.short_description, "d": body.description, "svc": body.service_id, "imp": impact,
-         "urg": urgency, "req": requester, "uid": user.id},
+         "urg": urgency, "req": requester, "uid": user.id, "proj": user.project_id},
     )
     return load(conn, user, row["id"])
 

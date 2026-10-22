@@ -9,7 +9,7 @@ from . import db
 from .config import get_settings
 from .errors import register_error_handlers
 from .routers import (approvals, attachments, audit, auth_routes, changes, dashboard, defects, incidents, problems,
-                      reference, releases, reports, users)
+                      projects, reference, releases, reports, users)
 
 
 @asynccontextmanager
@@ -44,7 +44,7 @@ async def reject_oversized_uploads(request: Request, call_next):
     return await call_next(request)
 
 for module in (auth_routes, reference, users, incidents, problems, defects, changes, releases, approvals, dashboard,
-               reports, audit, attachments):
+               reports, audit, attachments, projects):
     app.include_router(module.router, prefix=API)
 
 

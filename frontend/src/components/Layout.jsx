@@ -3,13 +3,14 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { api } from '../api'
 import { useAuth } from '../auth'
 import ChangePassword from './ChangePassword'
+import ProjectPicker from './ProjectPicker'
 import { roleLabel } from './ui'
 
 const SECTIONS = [
   { title: 'Service Management', items: [['incidents', 'Incidents'], ['problems', 'Problems'], ['defects', 'Defects'], ['changes', 'Changes'], ['releases', 'Releases']] },
   { title: 'Application Portfolio', items: [['services', 'Applications']] },
   { title: 'Governance & Operations', items: [['approvals', 'Approvals'], ['sla', 'SLA Management'], ['reports', 'Reports'], ['audit', 'Audit History']] },
-  { title: 'Administration', items: [['admin', 'Admin']] },
+  { title: 'Administration', items: [['admin', 'Admin'], ['projects', 'Projects']] },
 ]
 
 export default function Layout() {
@@ -22,6 +23,15 @@ export default function Layout() {
   const [pw, setPw] = useState(false)
   const [search, setSearch] = useState('')
   const [now, setNow] = useState(new Date())
+  const activeIds = me.active_project_ids || []
+  const [picked, setPicked] = useState(activeIds)
+  useEffect(() => setPicked(me.active_project_ids || []), [me.active_project_ids])
+  const applyProjects = () => {
+    const next = picked.length ? picked : me.projects.map((p) => p.id) // at least one project stays selected
+    if (next.length === activeIds.length && next.every((id) => activeIds.includes(id))) { setPicked(activeIds); return }
+    try { localStorage.setItem('itsm.project', next.join(',')) } catch { /* not remembered */ }
+    window.location.assign('/') // reload so every screen shows the chosen projects' data
+  }
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
   useEffect(() => { setOpen(false); setMenu(false); refreshCounts() }, [location.pathname, refreshCounts])
@@ -52,7 +62,12 @@ export default function Layout() {
           ⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" aria-label="Search incidents" />
         </form>
         <div className="actions">
-          {me.organization_name && <div className="time org-name">{me.organization_name}</div>}
+          {me.projects?.length ? (
+            <ProjectPicker compact projects={me.projects} picked={picked} onChange={setPicked} onClose={applyProjects} />
+          ) : me.role === 'employee' && me.organization_name ? <div className="time org-name">{me.organization_name}</div> : null}
+          <Link className="home-btn" to="/" title="Home" aria-label="Home">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>
+          </Link>
           <div className="time">{clock}</div>
           <button className="avatar" onClick={() => setMenu((m) => !m)} aria-label="Account menu"><span>{initials}</span></button>
         </div>
@@ -68,7 +83,6 @@ export default function Layout() {
 
       <div className={`shell ${collapsed ? 'nosidebar' : ''}`}>
         <aside className={open ? 'open' : ''}>
-          <NavLink to="/" end className={({ isActive }) => `sidebar-home ${isActive ? 'active' : ''}`}><span>Dashboard Home</span><span>›</span></NavLink>
           {SECTIONS.map((sec) => {
             const items = sec.items.filter(([key]) => me.menu.includes(key))
             if (!items.length) return null

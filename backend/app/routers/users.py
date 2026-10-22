@@ -145,6 +145,8 @@ def approve_signup(request_id: UUID, body: ApproveIn, admin: Principal = Depends
         {"id": req["id"], "email": req["email"], "name": req["full_name"], "role": body.role,
          "team": body.team_id if body.role != "admin" else None},
     )
+    conn.execute("""insert into user_projects(user_id, project_id)  -- start on the first project; an admin can change it
+                    select %(id)s, id from projects order by created_at limit 1 on conflict do nothing""", {"id": req["id"]})
     conn.execute("update signup_requests set status = 'approved', decided_at = now(), decided_by = %(by)s where id = %(id)s",
                  {"by": admin.id, "id": request_id})
     return _get_user(conn, req["id"])

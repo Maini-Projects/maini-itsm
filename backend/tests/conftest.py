@@ -54,6 +54,8 @@ def db_conninfo():
             c.execute("insert into auth.users(id, email) values (%s, %s)", (IDS[key], f"{key}@test.local"))
             c.execute("insert into profiles(id, email, full_name, role, team_id) values (%s,%s,%s,%s,%s)",
                       (IDS[key], f"{key}@test.local", key.title(), role, team.get(team_name)))
+        c.execute("""insert into user_projects(user_id, project_id)
+                     select id, (select id from projects order by created_at limit 1) from profiles where role <> 'admin'""")
     yield conninfo
     with psycopg.connect(ADMIN_URL, autocommit=True) as c:
         c.execute(f"drop database if exists {name} with (force)")

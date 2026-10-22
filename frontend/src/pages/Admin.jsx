@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import ProjectPicker from '../components/ProjectPicker'
 import { Badge, Empty, ErrorBox, Field, FormModal, Loading, roleLabel, useFetch, useToast } from '../components/ui'
 
 const ROLES = ['admin', 'manager', 'employee']
@@ -63,11 +64,19 @@ function UserModal({ user, self, teams, onClose, onSaved }) {
   const [f, setF] = useState({ full_name: user?.full_name || '', email: user?.email || '', password: '', role: user?.role || 'employee', team_id: user?.team_id || '', status: user?.status || 'active' })
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
   const needsTeam = f.role !== 'admin'
+  const projects = useFetch(() => api.get('/projects'))
+  const [picked, setPicked] = useState([])
+  useEffect(() => { if (!user && projects.data?.length) setPicked((p) => (p.length ? p : [projects.data[0].id])) }, [user, projects.data])
+  const [loaded, setLoaded] = useState(!user)
+  useEffect(() => { if (user) api.get(`/users/${user.id}/projects`).then((ids) => { setPicked(ids); setLoaded(true) }).catch(() => setLoaded(true)) }, [user])
+  const canHaveProjects = true
   const submit = async () => {
     if (needsTeam && !f.team_id) throw new Error('Choose a team for Support Engineers and Customers.')
     const team_id = needsTeam ? f.team_id : null
     if (user) await api.patch(`/users/${user.id}`, { full_name: f.full_name, role: f.role, team_id, status: f.status })
     else await api.post('/users', { email: f.email.trim(), full_name: f.full_name, password: f.password, role: f.role, team_id })
+    const saved = user || (await api.get('/users', { q: f.email.trim() })).find((u) => u.email.toLowerCase() === f.email.trim().toLowerCase())
+    if (saved && loaded) await api.put(`/users/${saved.id}/projects`, { project_ids: canHaveProjects ? picked : [] })
     toast(user ? 'User updated.' : 'User created.')
     onSaved()
   }
@@ -82,6 +91,9 @@ function UserModal({ user, self, teams, onClose, onSaved }) {
         </Field>
         <Field label="Team" hint={needsTeam ? 'Required. A Support Engineer sees only their own team.' : 'Administrators are not tied to a team.'}>
           <select value={needsTeam ? f.team_id : ''} onChange={set('team_id')} disabled={!needsTeam}><option value="">{needsTeam ? 'Choose a team' : '—'}</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+        </Field>
+        <Field label="Projects" wide hint="Projects this person works on; with more than one they can switch between them from the top bar. Administrators see all projects.">
+          <ProjectPicker projects={projects.data || []} picked={picked} onChange={setPicked} />
         </Field>
         {user && <Field label="Status"><select value={f.status} onChange={set('status')} disabled={self}><option value="active">active</option><option value="disabled">disabled</option></select></Field>}
         {self && <div className="hint" style={{ gridColumn: '1/-1', fontSize: 11.5, color: 'var(--muted)' }}>You cannot remove your own Administrator access or disable yourself.</div>}

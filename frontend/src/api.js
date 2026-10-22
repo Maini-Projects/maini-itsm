@@ -58,6 +58,7 @@ async function send(method, path, { body, params } = {}) {
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData // a file upload: the browser sets the type
   if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
   if (session) headers.Authorization = `Bearer ${session.access_token}`
+  try { const pid = localStorage.getItem('itsm.project'); if (pid) headers['X-Project-Id'] = pid } catch { /* default project */ }
   try {
     return await fetch(`${BASE}/api/v1${path}${qs(params)}`, {
       method, headers, body: body !== undefined ? (isForm ? body : JSON.stringify(body)) : undefined,

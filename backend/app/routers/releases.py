@@ -38,7 +38,7 @@ join profiles ow on ow.id = r.owner_id
 
 def _vis(user: Principal) -> tuple[str, dict]:
     """Reading is open to the whole organisation; changing is limited by can_manage and staff_only."""
-    return "true", {}
+    return "r.project_id = any(%(vis_proj)s)", {"vis_proj": user.project_ids}
 
 
 def load(conn, user: Principal, release_id: UUID) -> dict:
@@ -126,10 +126,10 @@ class ReleasePatch(BaseModel):
 def create_release(body: ReleaseIn, user: Principal = Depends(staff_only), conn=Depends(get_conn)):
     row = fetch_one(
         conn,
-        """insert into releases(name, environment, service_id, scope, rollback_plan, deployment_at, owner_id, updated_by)
+        """insert into releases(name, environment, service_id, scope, rollback_plan, deployment_at, owner_id, updated_by, project_id)
            values (%(name)s, %(environment)s, %(service_id)s, %(scope)s, %(rollback_plan)s, %(deployment_at)s,
-                   %(uid)s, %(uid)s) returning id""",
-        {**body.model_dump(), "uid": user.id},
+                   %(uid)s, %(uid)s, %(proj)s) returning id""",
+        {**body.model_dump(), "uid": user.id, "proj": user.project_id},
     )
     return _detail(conn, user, row["id"])
 

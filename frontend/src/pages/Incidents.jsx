@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import NoteBox from '../components/NoteBox'
-import {
+import { urlParam,
   DetailTitle, FieldBar, statusField, Badge, Empty, ErrorBox, Field, FormModal, Loading, OpenFor, PRIORITIES, Pager, PersonSelect, Priority, StatusBadge, Text,
   Timeline, Workflow, fmtDate, roleLabel, useAction, useDebounced, useFetch,
   useTab,
@@ -19,21 +19,22 @@ export function IncidentList() {
   const navigate = useNavigate()
   const [sp, setSp] = useSearchParams()
   const [q, setQ] = useState(sp.get('q') || '')
-  const [priority, setPriority] = useState('')
-  const [status, setStatus] = useState('')
+  const [priority, setPriority] = useState(urlParam('priority'))
+  const [status, setStatus] = useState(urlParam('status'))
   const [teamId, setTeamId] = useState('')
-  const [openOnly, setOpenOnly] = useState(false)
+  const [openOnly, setOpenOnly] = useState(urlParam('open_only') === '1')
+  const [serviceId, setServiceId] = useState(urlParam('service_id'))
   const [offset, setOffset] = useState(0)
   const [creating, setCreating] = useState(sp.get('new') === '1')
   const dq = useDebounced(q)
   const teams = useFetch(() => (me.role === 'admin' ? api.get('/teams') : []), [me.role])
 
   useEffect(() => { setQ(sp.get('q') || '') }, [sp])
-  useEffect(() => setOffset(0), [dq, priority, status, teamId, openOnly])
+  useEffect(() => setOffset(0), [dq, priority, status, teamId, openOnly, serviceId])
 
   const { data, error, loading } = useFetch(
-    () => api.get('/incidents', { q: dq.trim(), priority, status, team_id: teamId, open_only: openOnly || undefined, limit: LIMIT, offset }),
-    [dq, priority, status, teamId, openOnly, offset],
+    () => api.get('/incidents', { q: dq.trim(), priority, status, team_id: teamId, service_id: serviceId || undefined, open_only: openOnly || undefined, limit: LIMIT, offset }),
+    [dq, priority, status, teamId, openOnly, serviceId, offset],
   )
 
   const created = useRef(null)
@@ -66,6 +67,9 @@ export function IncidentList() {
         </div>
         <button className="btn" onClick={() => setCreating(true)}>+ New Incident</button>
       </div>
+      {serviceId && <div className="card" style={{ padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+        Showing one application's incidents <button className="btn2" onClick={() => setServiceId('')}>Clear filter ✕</button>
+      </div>}
       <ErrorBox error={error} />
       <div className="card table">
         <table>

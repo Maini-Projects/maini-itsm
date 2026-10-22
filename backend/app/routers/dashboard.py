@@ -78,11 +78,16 @@ def summary(user: Principal = Depends(current_user), conn=Depends(get_conn)):
 
     if user.role == "admin":
         appr_where, appr_params = "true", {}
-        scope, sp = "true", {}
+        scope, sp = "x.project_id = any(%(proj)s)", {"proj": user.project_ids}
     else:
         appr_where = "a.approver_role = 'manager' and a.team_id = %(team)s and a.requested_by <> %(me)s"
         appr_params = {"team": user.team_id, "me": user.id}
-        scope, sp = "x.team_id = %(team)s", {"team": user.team_id}
+        scope, sp = "x.team_id = %(team)s and x.project_id = any(%(proj)s)", {"team": user.team_id, "proj": user.project_ids}
+    appr_where += """ and exists (select 1 from (
+            select id, project_id from incidents union all select id, project_id from changes
+            union all select id, project_id from releases) rec
+          where rec.id = a.record_id and rec.project_id = any(%(proj)s))"""
+    appr_params["proj"] = user.project_ids
     by_type = {r["record_type"]: r["n"] for r in fetch_all(
         conn, f"select a.record_type::text, count(*) as n from approvals a "
               f"where a.status = 'pending' and {appr_where} group by a.record_type", appr_params)}

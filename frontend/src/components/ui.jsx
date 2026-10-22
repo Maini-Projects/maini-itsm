@@ -393,3 +393,6 @@ export function statusField({ status, actions, busy, onPick, none, label = (s) =
     onChange: (to) => { const a = next.find((x) => x.to === to); return a ? onPick(a) : undefined },
   }
 }
+
+// A filter value passed in the address, e.g. /incidents?priority=P1 (used when a report bar is clicked)
+export const urlParam = (k) => new URLSearchParams(window.location.search).get(k) || ''

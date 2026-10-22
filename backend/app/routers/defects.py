@@ -131,10 +131,10 @@ def create_defect(body: DefectIn, user: Principal = Depends(current_user), conn=
     row = fetch_one(
         conn,
         """insert into defects(title, description, steps_to_reproduce, expected_result, actual_result, service_id,
-                               severity, environment, raised_by, updated_by)
+                               severity, environment, raised_by, updated_by, project_id)
            values (%(title)s, %(description)s, %(steps_to_reproduce)s, %(expected_result)s, %(actual_result)s,
-                   %(service_id)s, %(severity)s, %(environment)s, %(uid)s, %(uid)s) returning id""",
-        {**body.model_dump(), "uid": user.id},
+                   %(service_id)s, %(severity)s, %(environment)s, %(uid)s, %(uid)s, %(proj)s) returning id""",
+        {**body.model_dump(), "uid": user.id, "proj": user.project_id},
     )
     d = load(conn, user, row["id"])
     d["can_manage"] = can_manage(user, d)

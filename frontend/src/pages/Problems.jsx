@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import NoteBox from '../components/NoteBox'
-import {
+import { urlParam,
   DetailTitle, FieldBar, statusField, Empty, ErrorBox, Field, FormModal, Loading, PRIORITIES, Pager, PersonSelect, Priority, RecordPicker, StatusBadge, Text, Timeline,
   Workflow, fmtDate, useAction, useDebounced, useFetch,
   useTab,
@@ -17,9 +17,9 @@ export function ProblemList() {
   const { me } = useAuth()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
-  const [status, setStatus] = useState('')
-  const [priority, setPriority] = useState('')
-  const [openOnly, setOpenOnly] = useState(false)
+  const [status, setStatus] = useState(urlParam('status'))
+  const [priority, setPriority] = useState(urlParam('priority'))
+  const [openOnly, setOpenOnly] = useState(urlParam('open_only') === '1')
   const [offset, setOffset] = useState(0)
   const [sp, setSp] = useSearchParams()
   const [creating, setCreating] = useState(sp.get('new') === '1')

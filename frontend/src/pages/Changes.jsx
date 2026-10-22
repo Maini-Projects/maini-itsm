@@ -4,7 +4,7 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 import NoteBox from '../components/NoteBox'
 import ApprovalBox from '../components/ApprovalBox'
-import {
+import { urlParam,
   DetailTitle, FieldBar, statusField, Badge, Empty, ErrorBox, Field, FormModal, Loading, Pager, RiskBadge, StatusBadge, Text, Timeline, Workflow, fmtDate,
   fmtShort, fromInputDate, toInputDate, useAction, useDebounced, useFetch,
   useTab,
@@ -20,9 +20,9 @@ export function ChangeList() {
   const { me } = useAuth()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
-  const [type, setType] = useState('')
-  const [status, setStatus] = useState('')
-  const [risk, setRisk] = useState('')
+  const [type, setType] = useState(urlParam('type'))
+  const [status, setStatus] = useState(urlParam('status'))
+  const [risk, setRisk] = useState(urlParam('risk'))
   const [offset, setOffset] = useState(0)
   const [sp, setSp] = useSearchParams()
   const [creating, setCreating] = useState(sp.get('new') === '1' && me.role !== 'employee')

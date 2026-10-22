@@ -7,6 +7,7 @@ import csv
 import io
 from datetime import date, datetime, timezone
 from typing import Callable, Literal
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
@@ -73,7 +74,7 @@ def by_priority(conn, user):
     rows = _grouped(conn, user, "i.priority::text", "priority")
     cols = [col("priority", "Priority"), col("total", "Incidents"), col("open_count", "Open"),
             col("breached", "Open and past SLA")]
-    return cols, rows, {"label": "Incidents by priority", "labels": [r["priority"] for r in rows],
+    return cols, rows, {"key": "priority", "label": "Incidents by priority", "labels": [r["priority"] for r in rows],
                         "values": [r["total"] for r in rows]}
 
 
@@ -82,7 +83,7 @@ def by_service(conn, user):
     rows.sort(key=lambda r: (-r["total"], r["service_name"]))
     cols = [col("service_name", "Application"), col("total", "Incidents"), col("open_count", "Open"),
             col("breached", "Open and past SLA")]
-    return cols, rows, {"label": "Incidents by application", "labels": [r["service_name"] for r in rows],
+    return cols, rows, {"key": "service_name", "label": "Incidents by application", "labels": [r["service_name"] for r in rows],
                         "values": [r["total"] for r in rows]}
 
 
@@ -143,7 +144,7 @@ def defects_by_severity(conn, user):
              order by array_position(array['Critical','High','Medium','Low'], d.severity::text)""",
         vp)
     cols = [col("severity", "Severity"), col("total", "Defects"), col("open_count", "Open")]
-    return cols, rows, {"label": "Defects by severity", "labels": [r["severity"] for r in rows],
+    return cols, rows, {"key": "severity", "label": "Defects by severity", "labels": [r["severity"] for r in rows],
                         "values": [r["total"] for r in rows]}
 
 
@@ -158,7 +159,7 @@ def changes_by_status(conn, user):
         vp)
     cols = [col("status", "Status"), col("total", "Changes"), col("emergency", "Emergency"),
             col("high_risk", "High risk")]
-    return cols, rows, {"label": "Changes by status", "labels": [r["status"] for r in rows],
+    return cols, rows, {"key": "status", "label": "Changes by status", "labels": [r["status"] for r in rows],
                         "values": [r["total"] for r in rows]}
 
 
@@ -184,6 +185,11 @@ def pending_approvals(conn, user):
         where, params = "true", {}
     else:
         where, params = "a.approver_role = 'manager' and a.team_id = %(team)s", {"team": user.team_id}
+    where += """ and exists (select 1 from (
+            select id, project_id from incidents union all select id, project_id from changes
+            union all select id, project_id from releases) rec
+          where rec.id = a.record_id and rec.project_id = any(%(proj)s))"""
+    params["proj"] = user.project_ids
     rows = fetch_all(
         conn,
         f"""select a.record_number, a.record_type::text as record_type, a.approver_role::text as approver_role,
@@ -218,6 +224,126 @@ def list_reports(_: Principal = Depends(staff_only)):
             for k, (title, cat, _fn) in REPORTS.items()]
 
 
+# Bar colours: meaningful ones for well-known labels, otherwise a rotating palette (same as the on-screen graph)
+SEMANTIC = {"Critical": "#c0392b", "High": "#e67e22", "Medium": "#f1c40f", "Low": "#2e9e6b", "P1": "#c0392b",
+            "P2": "#e67e22", "P3": "#f1c40f", "P4": "#2e9e6b", "New": "#4a7fb5", "Assigned": "#7a5aa6",
+            "In Progress": "#e67e22", "Pending": "#f1c40f", "Resolved": "#2e9e6b", "Closed": "#7f8c8d",
+            "Production": "#c74634", "UAT": "#2f8aa0"}
+PALETTE = ["#c74634", "#2f8aa0", "#e0a03a", "#4a7fb5", "#2e9e6b", "#7a5aa6", "#d96a8a", "#6b8e23", "#b5651d", "#3d5a80"]
+
+# The column a list report is counted by for its bar graph, in order of preference
+CHART_BY = ("priority", "severity", "status", "environment", "team_name", "service_name", "record_type", "approver_role")
+
+
+def _auto_chart(columns: list[dict], rows: list[dict]) -> dict | None:
+    """Reports that are plain lists get a bar graph counting their rows by the first suitable column."""
+    labels = {c["key"]: c["label"] for c in columns}
+    for key in CHART_BY:
+        if key in labels and rows:
+            counts: dict[str, int] = {}
+            for r in rows:
+                name = str(r.get(key) or "None")
+                counts[name] = counts.get(name, 0) + 1
+            ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+            return {"key": key, "label": f"Number of records by {labels[key].lower()}", "labels": [k for k, _ in ordered],
+                    "values": [v for _, v in ordered]}
+    return None
+
+
+def _pdf(title: str, category: str, scope: str, columns: list[dict], rows: list[dict], chart: dict | None) -> bytes:
+    from reportlab.graphics.charts.barcharts import VerticalBarChart
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    brand = colors.HexColor("#963322")
+    styles = getSampleStyleSheet()
+    small = styles["BodyText"].clone("cell", fontSize=7.5, leading=9)
+    head = styles["BodyText"].clone("head", fontSize=7.5, leading=9, textColor=colors.white, fontName="Helvetica-Bold")
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=14 * mm, rightMargin=14 * mm, topMargin=14 * mm,
+                            bottomMargin=14 * mm, title=title)
+    story = [Paragraph(f"<font color='#963322'><b>{category.upper()}</b></font>", styles["BodyText"]),
+             Paragraph(f"<b>{title}</b>", styles["Title"]),
+             Paragraph(f"Scope: {scope} &middot; generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC &middot; "
+                       f"{len(rows)} row(s)", styles["BodyText"]), Spacer(1, 6 * mm)]
+    if chart and chart["labels"]:
+        labels = [str(x)[:22] for x in chart["labels"]][:20]
+        values = [float(v or 0) for v in chart["values"]][:20]
+        d = Drawing(260 * mm, 62 * mm)
+        bc = VerticalBarChart()
+        bc.x, bc.y, bc.width, bc.height = 12 * mm, 14 * mm, 236 * mm, 40 * mm
+        bc.data = [values]
+        bc.categoryAxis.categoryNames = labels
+        bc.categoryAxis.labels.fontSize = 7
+        bc.categoryAxis.labels.angle = 20 if len(labels) > 6 else 0
+        bc.categoryAxis.labels.boxAnchor = "ne" if len(labels) > 6 else "n"
+        bc.valueAxis.valueMin = 0
+        bc.valueAxis.valueMax = max(values + [1]) * 1.15
+        bc.valueAxis.labels.fontSize = 7
+        for i, label in enumerate(chart["labels"][:20]):
+            bc.bars[(0, i)].fillColor = colors.HexColor(SEMANTIC.get(str(label), PALETTE[i % len(PALETTE)]))
+        bc.barLabelFormat = "%d"
+        bc.barLabels.nudge = 6
+        bc.barLabels.fontSize = 7
+        d.add(bc)
+        story += [Paragraph(f"<b>{chart['label']}</b>", styles["BodyText"]), d, Spacer(1, 4 * mm)]
+    if rows:
+        def cell(c, r):
+            v = r.get(c["key"])
+            if isinstance(v, (datetime, date)):
+                v = v.strftime("%Y-%m-%d %H:%M") if isinstance(v, datetime) else v.isoformat()
+            return Paragraph("" if v is None else str(v).replace("&", "&amp;").replace("<", "&lt;"), small)
+        data = [[Paragraph(c["label"], head) for c in columns]] + [[cell(c, r) for c in columns] for r in rows[:1000]]
+        t = Table(data, repeatRows=1)
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), brand), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7f1ee")]),
+                               ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#ddd7d1"))]))
+        story.append(t)
+        if len(rows) > 1000:
+            story.append(Paragraph("Showing the first 1000 rows. Download the CSV for everything.", small))
+    else:
+        story.append(Paragraph("No data for this report yet.", styles["BodyText"]))
+    doc.build(story)
+    return buf.getvalue()
+
+
+# The list page a report's bars open, and any filter that goes with every bar
+REPORT_PAGE = {"open_incidents": ("/incidents", {"open_only": "1"}), "incidents_by_priority": ("/incidents", {}),
+               "incidents_by_service": ("/incidents", {}), "sla_breaches": ("/incidents", {"open_only": "1"}),
+               "open_problems": ("/problems", {"open_only": "1"}), "open_defects": ("/defects", {"open_only": "1"}),
+               "defects_by_severity": ("/defects", {}), "changes_by_status": ("/changes", {}),
+               "upcoming_releases": ("/releases", {})}
+BAR_FILTER = {"priority": "priority", "severity": "severity", "status": "status", "environment": "environment"}
+PRIORITY_CODES = {v: k for k, v in PRIORITY_NAMES.items()}
+
+
+def _bar_links(conn, key: str, chart: dict) -> list[str | None]:
+    """For each bar, the page (with filters) that shows the records it counts. None when there is no such page."""
+    page, fixed = REPORT_PAGE.get(key, (None, {}))
+    if page is None:
+        return [None] * len(chart["labels"])
+    out = []
+    services = {}
+    if chart.get("key") == "service_name":
+        services = {r["name"]: str(r["id"]) for r in fetch_all(conn, "select id, name from services")}
+    for label in chart["labels"]:
+        params = dict(fixed)
+        col = chart.get("key")
+        if col in BAR_FILTER:
+            params[BAR_FILTER[col]] = PRIORITY_CODES.get(label, label) if col == "priority" else label
+        elif col == "service_name":
+            if label not in services:
+                out.append(None)
+                continue
+            params["service_id"] = services[label]
+        out.append(page + ("?" + urlencode(params) if params else ""))
+    return out
+
+
 def _cell(v):
     if isinstance(v, (datetime, date)):
         return v.isoformat()
@@ -225,7 +351,7 @@ def _cell(v):
 
 
 @router.get("/reports/{key}")
-def run_report(key: str, format: Literal["json", "csv"] = "json", user: Principal = Depends(staff_only),
+def run_report(key: str, format: Literal["json", "csv", "pdf"] = "json", user: Principal = Depends(staff_only),
                conn=Depends(get_conn)):
     if key not in REPORTS:
         raise api_error(404, "not_found", "Report not found.")
@@ -236,8 +362,15 @@ def run_report(key: str, format: Literal["json", "csv"] = "json", user: Principa
             r["priority"] = PRIORITY_NAMES[r["priority"]]
         if r.get("approver_role") in ROLE_NAMES:
             r["approver_role"] = ROLE_NAMES[r["approver_role"]]
+    if chart is None:
+        chart = _auto_chart(columns, rows)
     if chart:
         chart["labels"] = [PRIORITY_NAMES.get(label, label) for label in chart["labels"]]
+        chart["links"] = _bar_links(conn, key, chart)
+    scope = "All teams" if user.role == "admin" else "Your team"
+    if format == "pdf":
+        return Response(content=_pdf(title, category, scope, columns, rows, chart), media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{key}.pdf"'})
     if format == "csv":
         out = io.StringIO()
         writer = csv.writer(out)
@@ -246,6 +379,5 @@ def run_report(key: str, format: Literal["json", "csv"] = "json", user: Principa
             writer.writerow([_cell(r[c["key"]]) for c in columns])
         return Response(content="﻿" + out.getvalue(), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": f'attachment; filename="{key}.csv"'})
-    scope = "All teams" if user.role == "admin" else "Your team"
     return {"key": key, "title": title, "category": category, "scope": scope,
             "generated_at": datetime.now(timezone.utc), "columns": columns, "rows": rows, "chart": chart}

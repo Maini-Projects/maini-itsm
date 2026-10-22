@@ -135,9 +135,9 @@ def create_problem(body: ProblemIn, user: Principal = Depends(current_user), con
         raise api_error(403, "forbidden", "Only staff can set the priority of a problem.")
     row = fetch_one(
         conn,
-        """insert into problems(title, description, service_id, priority, raised_by, updated_by)
-           values (%(t)s, %(d)s, %(svc)s, coalesce(%(p)s::priority_level, 'P3'), %(uid)s, %(uid)s) returning id""",
-        {"t": body.title, "d": body.description, "svc": body.service_id, "p": body.priority, "uid": user.id},
+        """insert into problems(title, description, service_id, priority, raised_by, updated_by, project_id)
+           values (%(t)s, %(d)s, %(svc)s, coalesce(%(p)s::priority_level, 'P3'), %(uid)s, %(uid)s, %(proj)s) returning id""",
+        {"t": body.title, "d": body.description, "svc": body.service_id, "p": body.priority, "uid": user.id, "proj": user.project_id},
     )
     return _detail(conn, user, row["id"])
 

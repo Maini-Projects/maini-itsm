@@ -40,7 +40,7 @@ join profiles rq on rq.id = c.requester_id
 
 def _vis(user: Principal) -> tuple[str, dict]:
     """Reading is open to the whole organisation; changing is limited by can_manage and staff_only."""
-    return "true", {}
+    return "c.project_id = any(%(vis_proj)s)", {"vis_proj": user.project_ids}
 
 
 def load(conn, user: Principal, change_id: UUID) -> dict:
@@ -142,10 +142,10 @@ def create_change(body: ChangeIn, user: Principal = Depends(staff_only), conn=De
     row = fetch_one(
         conn,
         """insert into changes(title, type, risk, service_id, implementation_plan, test_plan, backout_plan,
-                               planned_start, planned_end, requester_id, updated_by)
+                               planned_start, planned_end, requester_id, updated_by, project_id)
            values (%(title)s, %(type)s, %(risk)s, %(service_id)s, %(implementation_plan)s, %(test_plan)s,
-                   %(backout_plan)s, %(planned_start)s, %(planned_end)s, %(uid)s, %(uid)s) returning id""",
-        {**body.model_dump(), "uid": user.id},
+                   %(backout_plan)s, %(planned_start)s, %(planned_end)s, %(uid)s, %(uid)s, %(proj)s) returning id""",
+        {**body.model_dump(), "uid": user.id, "proj": user.project_id},
     )
     return _detail(conn, user, row["id"])
 
