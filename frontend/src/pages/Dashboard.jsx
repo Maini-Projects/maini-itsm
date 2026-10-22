@@ -83,13 +83,6 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="dashboard-title-row">
-        <h2 className="title">IT Operations Smart Dashboard</h2>
-        {me.organization_name && <div className="project-name"><span className="project-label">Project</span><strong>{me.organization_name}</strong></div>}
-      </div>
-      <p className="sub">
-        {staff ? (me.role === 'admin' ? 'Operational status across all teams.' : `Operational status for the ${me.team_name} team.`) : 'Your incidents and their progress.'}
-      </p>
       <div className="major-action-only"><NewRequestMenu role={me.role} /></div>
 
       {staff ? (

@@ -14,6 +14,7 @@ import { Services, Sla } from './pages/Portfolio'
 import { ReportView, Reports } from './pages/Reports'
 import Audit from './pages/Audit'
 import Admin from './pages/Admin'
+import Account from './pages/Account'
 
 function Guard({ area, children }) {
   const { me } = useAuth()
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="reports/:key" element={g('reports', <ReportView />)} />
         <Route path="audit" element={g('audit', <Audit />)} />
         <Route path="admin" element={g('admin', <Admin />)} />
+        <Route path="account" element={<Account />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

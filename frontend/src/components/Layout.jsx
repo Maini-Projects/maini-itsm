@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { Field, FormModal, roleLabel, useToast } from './ui'
-import PasswordInput from './PasswordInput'
+import ChangePassword from './ChangePassword'
+import { roleLabel } from './ui'
 
 const SECTIONS = [
   { title: 'Service Management', items: [['incidents', 'Incidents'], ['problems', 'Problems'], ['defects', 'Defects'], ['changes', 'Changes'], ['releases', 'Releases']] },
@@ -11,25 +11,6 @@ const SECTIONS = [
   { title: 'Governance & Operations', items: [['approvals', 'Approvals'], ['sla', 'SLA Management'], ['reports', 'Reports'], ['audit', 'Audit History']] },
   { title: 'Administration', items: [['admin', 'Admin']] },
 ]
-
-function ChangePassword({ onClose }) {
-  const toast = useToast()
-  const [cur, setCur] = useState(''), [next, setNext] = useState(''), [again, setAgain] = useState('')
-  const submit = async () => {
-    if (next !== again) throw new Error('The new passwords do not match.')
-    await api.post('/auth/password', { current_password: cur, new_password: next })
-    toast('Password changed.')
-  }
-  return (
-    <FormModal title="Change password" submitLabel="Change password" onClose={onClose} onSubmit={submit} width={460}>
-      <div className="form" style={{ gridTemplateColumns: '1fr' }}>
-        <Field label="Current password"><PasswordInput value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></Field>
-        <Field label="New password" hint="At least 8 characters."><PasswordInput value={next} onChange={(e) => setNext(e.target.value)} minLength={8} autoComplete="new-password" required /></Field>
-        <Field label="Repeat new password"><PasswordInput value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" required /></Field>
-      </div>
-    </FormModal>
-  )
-}
 
 export default function Layout() {
   const { me, signOut, refreshCounts } = useAuth()
@@ -68,15 +49,17 @@ export default function Layout() {
           <img src="/logo.png" alt="" /><span className="brand-text">MAINI CONSULTING</span>
         </Link>
         <form className="search" onSubmit={goSearch} role="search">
-          ⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search incidents by number or description" aria-label="Search incidents" />
+          ⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" aria-label="Search incidents" />
         </form>
         <div className="actions">
+          {me.organization_name && <div className="time org-name">{me.organization_name}</div>}
           <div className="time">{clock}</div>
           <button className="avatar" onClick={() => setMenu((m) => !m)} aria-label="Account menu"><span>{initials}</span></button>
         </div>
         {menu && (
           <div className="usermenu">
             <div className="who"><b>{me.full_name}</b><span>{me.email}<br />{roleLabel(me.role)}{me.team_name ? ` · ${me.team_name} team` : ''}</span></div>
+            <button onClick={() => { setMenu(false); navigate('/account') }}>Account settings</button>
             <button onClick={() => { setMenu(false); setPw(true) }}>Change password</button>
             <button onClick={signOut}>Sign out</button>
           </div>
@@ -108,8 +91,7 @@ export default function Layout() {
         </aside>
         <div>
           <section className="hero"><div className="in">
-            <h1>Intelligent Managed Services Support</h1>
-            <p>Cloud-based IT service management for incidents, problems, changes, releases, SLAs, approvals, reporting and administration.</p>
+            <h1>AI-powered INTELLIGENT SUPPORT</h1>
           </div></section>
           <main className="content"><Outlet /></main>
         </div>
