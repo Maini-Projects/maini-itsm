@@ -63,8 +63,27 @@ function SlaCard({ rows, to }) {
             <b>{r.percent === null ? '—' : `${r.percent}%`}</b>
           </div>
         ))}
-        <small style={{ color: 'var(--muted)', fontSize: 11 }}>Share of incidents resolved within their target. “—” means none resolved yet this month.</small>
       </div>
+    </div>
+  )
+}
+
+function KnowledgeCard() {
+  const { data, loading } = useFetch(() => api.get('/kb', { limit: 5 }))
+  return (
+    <div className="card" style={{ marginTop: 15 }}>
+      <div className="head"><h3>Knowledge base</h3><Link className="btn2" to="/kb">View all</Link></div>
+      {loading && !data ? <Loading /> : !data?.items.length ? (
+        <div className="kb-empty">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" /><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" /><path d="M9 8h7M9 12h5" /></svg>
+          <b>No articles yet</b>
+          <span>Guides and answers to common questions will appear here.</span>
+        </div>
+      ) : (
+        <div className="body">
+          {data.items.map((a) => <div key={a.id}><Link className="link" to={`/kb/${a.id}`}>{a.title}</Link>{a.category && <> <Badge tone="blue">{a.category}</Badge></>}</div>)}
+        </div>
+      )}
     </div>
   )
 }
@@ -136,6 +155,7 @@ export default function Dashboard() {
         </div>
       )}
 
+
       {staff && (
         <div className="grid3">
           <div className="card">
@@ -158,6 +178,8 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+            <KnowledgeCard />
     </>
   )
 }

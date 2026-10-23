@@ -37,14 +37,13 @@ export function ChangeList() {
     <>
       <div className="eyebrow">Change Management <CountPill of="changes" /></div>
       <h2 className="title">Change Requests</h2>
-      <p className="sub">Standard, normal and emergency changes with risk, approval and scheduling. Support Engineers raise changes; an Administrator approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
         <div className="filters">
           <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search changes" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search changes" />
-          <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Type"><option value="">All types</option>{TYPES.map((t) => <option key={t}>{t}</option>)}</select>
-          <select value={risk} onChange={(e) => setRisk(e.target.value)} aria-label="Risk"><option value="">All risks</option>{LEVELS.map((t) => <option key={t}>{t}</option>)}</select>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+          <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Type"><option value="">Type</option>{TYPES.map((t) => <option key={t}>{t}</option>)}</select>
+          <select value={risk} onChange={(e) => setRisk(e.target.value)} aria-label="Risk"><option value="">Risk</option>{LEVELS.map((t) => <option key={t}>{t}</option>)}</select>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">Status</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
         </div>
         {me.role !== 'employee' ? <button className="btn" onClick={() => setCreating(true)}>+ New Change</button> : <span />}
       </div>

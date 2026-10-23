@@ -16,6 +16,9 @@ import Audit from './pages/Audit'
 import Admin from './pages/Admin'
 import Account from './pages/Account'
 import Projects from './pages/Projects'
+import Search from './pages/Search'
+import Org from './pages/Org'
+import { KnowledgeArticle, KnowledgeList } from './pages/KnowledgeBase'
 
 function Guard({ area, children }) {
   const { me } = useAuth()
@@ -56,6 +59,10 @@ export default function App() {
         <Route path="audit" element={g('audit', <Audit />)} />
         <Route path="admin" element={g('admin', <Admin />)} />
         <Route path="projects" element={g('projects', <Projects />)} />
+        <Route path="kb" element={g('kb', <KnowledgeList />)} />
+        <Route path="kb/:id" element={g('kb', <KnowledgeArticle />)} />
+        <Route path="org" element={g('org', <Org />)} />
+        <Route path="search" element={<Search />} />
         <Route path="account" element={<Account />} />
         <Route path="*" element={<NotFound />} />
       </Route>

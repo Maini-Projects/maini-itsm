@@ -23,6 +23,7 @@ TENANT_TABLES = ["incidents", "incident_comments", "problems", "problem_incident
 NUMBERING = [("incidents", "incident_seq", "INC"), ("problems", "problem_seq", "PRB"), ("defects", "defect_seq", "DEF"),
              ("changes", "change_seq", "CHG"), ("releases", "release_seq", "REL")]
 MAIN_TABLES = [t for t, _s, _p in NUMBERING]
+KB_TABLES = ["kb_articles"]  # knowledge base: created from tenant_sql/kb.sql, not part of the numbered records
 
 
 def apply_numbering(conn) -> None:
@@ -35,7 +36,7 @@ def apply_numbering(conn) -> None:
 def add_project_column(conn, project_id) -> None:
     """Every row says which customer it belongs to (the same value for the whole schema), so lists that combine
     several customers can show it."""
-    for t in MAIN_TABLES:
+    for t in MAIN_TABLES + KB_TABLES:
         conn.execute(f"alter table {t} add column if not exists project_id uuid not null default '{project_id}'")
 
 
@@ -66,7 +67,7 @@ def use_schemas(conn, schemas: list[str]) -> None:
         return use_schema(conn, schemas[0])
     if not all(SCHEMA_RE.match(s) for s in schemas):
         raise ValueError("not a customer schema")
-    for t in TENANT_TABLES:
+    for t in TENANT_TABLES + KB_TABLES:
         union = " union all ".join(f'select * from "{s}".{t}' for s in schemas)
         conn.execute(f"create or replace temp view {t} as {union}")
     quoted = ", ".join(f'"{s}"' for s in schemas)
@@ -75,12 +76,12 @@ def use_schemas(conn, schemas: list[str]) -> None:
 
 
 def drop_multi_views(conn) -> None:
-    conn.execute("drop view if exists " + ", ".join(f"pg_temp.{t}" for t in TENANT_TABLES))
+    conn.execute("drop view if exists " + ", ".join(f"pg_temp.{t}" for t in TENANT_TABLES + KB_TABLES))
     conn.multi_views = False
 
 
 WRITE_TABLE = {"incidents": "incidents", "problems": "problems", "defects": "defects", "changes": "changes",
-               "releases": "releases", "approvals": "approvals", "attachments": "attachments"}
+               "releases": "releases", "approvals": "approvals", "attachments": "attachments", "kb": "kb_articles"}
 
 
 def schema_owning(conn, schemas: list[str], path: str, ids: list) -> str:
@@ -105,6 +106,7 @@ def provision(conn, schema: str, project_id, fill: Callable | None = None) -> No
     conn.execute(f'create schema "{schema}"')
     use_schema(conn, schema)
     conn.execute((SQL_DIR / "tables.sql").read_text(encoding="utf8"))
+    conn.execute((SQL_DIR / "kb.sql").read_text(encoding="utf8"))
     apply_numbering(conn)
     if fill:
         fill(conn)

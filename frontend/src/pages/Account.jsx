@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import ChangePassword from '../components/ChangePassword'
+import ConfirmSignOut from '../components/ConfirmSignOut'
 import { ErrorBox, Field, Text, roleLabel, useToast } from '../components/ui'
 
 const KEEP = [[1, '1 day'], [3, '3 days'], [7, '7 days'], [10, '10 days'], [30, '30 days'], [60, '60 days'], [90, '90 days'], [180, '6 months'], [365, '1 year']]
@@ -31,8 +32,9 @@ function AuditRetention() {
 }
 
 export default function Account() {
-  const { me, signOut } = useAuth()
+  const { me } = useAuth()
   const [pw, setPw] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   return (
     <>
       <div className="eyebrow">Account</div>
@@ -50,10 +52,11 @@ export default function Account() {
       <div className="card" style={{ padding: 18, marginBottom: 16 }}>
         <h3 style={{ marginTop: 0 }}>Security</h3>
         <button className="btn" onClick={() => setPw(true)}>Change password</button>{' '}
-        <button className="btn2" onClick={signOut}>Sign out</button>
+        <button className="btn2" onClick={() => setLeaving(true)}>Sign out</button>
       </div>
       {me.role === 'admin' && <AuditRetention />}
       {pw && <ChangePassword onClose={() => setPw(false)} />}
+      {leaving && <ConfirmSignOut onClose={() => setLeaving(false)} />}
     </>
   )
 }

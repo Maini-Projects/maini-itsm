@@ -20,7 +20,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => { if (hasSession()) loadMe() }, [loadMe])
-  useEffect(() => onSession((s) => { if (!s) { setMe(null); setCounts(null); setState('out') } }), [])
+  useEffect(() => onSession((s) => { if (!s) { setMe(null); setCounts(null); setState('out'); try { sessionStorage.removeItem('itsm.chat') } catch { /* nothing kept */ } } }), [])
 
   const refreshCounts = useCallback(async () => {
     try { setCounts(await api.get('/dashboard/summary')) } catch { /* the sidebar just shows no numbers */ }

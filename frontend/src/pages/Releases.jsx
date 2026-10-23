@@ -34,13 +34,12 @@ export function ReleaseList() {
     <>
       <div className="eyebrow">Release Management <CountPill of="releases" /></div>
       <h2 className="title">Releases</h2>
-      <p className="sub">Plan releases, group changes and track approval, deployment and validation. Support Engineers raise releases; an Administrator approves them.{me.role === 'employee' && ' You have read-only access.'}</p>
       <div className="toolbar">
         <div className="filters">
           <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search releases" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search releases" />
-          <select value={environment} onChange={(e) => setEnvironment(e.target.value)} aria-label="Environment"><option value="">All environments</option><option>Production</option><option>UAT</option></select>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+          <select value={environment} onChange={(e) => setEnvironment(e.target.value)} aria-label="Environment"><option value="">Environment</option><option>Production</option><option>UAT</option></select>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">Status</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
         </div>
         {me.role !== 'employee' ? <button className="btn" onClick={() => setCreating(true)}>+ New Release</button> : <span />}
       </div>

@@ -9,7 +9,9 @@ from datetime import date, datetime, timezone
 from typing import Callable, Literal
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
 from ..db import fetch_all, get_conn
@@ -343,6 +345,80 @@ def _cell(v):
     if isinstance(v, (datetime, date)):
         return v.isoformat()
     return "" if v is None else v
+
+
+# ---- the timeline on the Reports front page -------------------------------------------------------------------
+# type -> (table, owner column, assignee column, "level" column, how a record counts as finished, finished filter)
+TIMELINE = {
+    "incidents": ("incidents", "requester_id", "assignee_id", "priority::text", "coalesce(x.resolved_at, x.closed_at)", "true"),
+    "problems": ("problems", "raised_by", "owner_id", "priority::text", "x.updated_at", "x.status in ('Resolved','Closed')"),
+    "defects": ("defects", "raised_by", "assignee_id", "severity::text", "coalesce(x.resolved_at, x.closed_at)", "true"),
+    "changes": ("changes", None, None, "risk::text", "x.updated_at", "x.status = 'Closed'"),
+    "releases": ("releases", None, None, "environment::text", "x.updated_at", "x.status = 'Closed'"),
+}
+BUCKET = {"day": "1 day", "week": "1 week", "month": "1 month"}
+
+
+@router.get("/reports/timeline")
+def timeline(
+    type: Literal["incidents", "problems", "defects", "changes", "releases"] = "incidents",
+    days: int = Query(default=30, ge=1, le=730),
+    bucket: Literal["day", "week", "month"] = "day",
+    split: Literal["none", "level", "status", "team", "project"] = "level",
+    level: str | None = None,
+    status: str | None = None,
+    team_id: UUID | None = None,
+    project_id: UUID | None = None,
+    user: Principal = Depends(staff_only),
+    conn=Depends(get_conn),
+):
+    """Records created over time (stacked by the chosen split) and, as a line, records finished over the same time."""
+    table, owner, assignee, level_col, finished_at, finished_where = TIMELINE[type]
+    vis, vp = visibility(user, alias="x", owner_col=owner, assignee_col=assignee) if owner else ("true", {})
+    split_expr = {"none": "'All'", "level": f"x.{level_col}", "status": "x.status",
+                  "team": "coalesce(t.name, 'No team')", "project": "x.project_id::text"}[split]
+    where = f"""{vis}
+        and (%(level)s::text is null or x.{level_col} = %(level)s)
+        and (%(status)s::text is null or x.status = %(status)s)
+        and (%(team)s::uuid is null or x.team_id = %(team)s)
+        and (%(proj)s::uuid is null or x.project_id = %(proj)s)"""
+    params = {**vp, "level": level, "status": status, "team": team_id, "proj": project_id, "days": days}
+    unit, step = bucket, BUCKET[bucket]
+    buckets = [r["d"] for r in fetch_all(
+        conn, f"""select generate_series(date_trunc('{unit}', now() - make_interval(days => %(days)s)),
+                                         date_trunc('{unit}', now()), interval '{step}')::date as d""", params)]
+    created_rows = fetch_all(
+        conn,
+        f"""select date_trunc('{unit}', x.created_at)::date as d, {split_expr} as cat, count(*) as n
+              from {table} x left join teams t on t.id = x.team_id
+             where {where} and x.created_at >= date_trunc('{unit}', now() - make_interval(days => %(days)s))
+             group by 1, 2""", params)
+    finished_rows = fetch_all(
+        conn,
+        f"""select date_trunc('{unit}', {finished_at})::date as d, count(*) as n
+              from {table} x
+             where {where} and {finished_at} is not null and {finished_where}
+               and {finished_at} >= date_trunc('{unit}', now() - make_interval(days => %(days)s))
+             group by 1""", params)
+    names = {}
+    if split == "project":
+        names = {str(r["id"]): r["name"] for r in fetch_all(conn, "select id, name from projects")}
+    idx = {d: i for i, d in enumerate(buckets)}
+    cats: dict[str, list[int]] = {}
+    for r in created_rows:
+        label = names.get(r["cat"], r["cat"]) if split == "project" else r["cat"]
+        label = PRIORITY_NAMES.get(label, label) if split == "level" and type in ("incidents", "problems") else label
+        if r["d"] in idx:
+            cats.setdefault(label, [0] * len(buckets))[idx[r["d"]]] += r["n"]
+    finished = [0] * len(buckets)
+    for r in finished_rows:
+        if r["d"] in idx:
+            finished[idx[r["d"]]] = r["n"]
+    order = ["Critical", "High", "Medium", "Low"]
+    ordered = sorted(cats, key=lambda c: (order.index(c) if c in order else 99, c))
+    return {"type": type, "bucket": bucket, "labels": [d.isoformat() for d in buckets], "categories": ordered,
+            "created": {c: cats[c] for c in ordered}, "finished": finished,
+            "created_total": sum(sum(v) for v in cats.values()), "finished_total": sum(finished)}
 
 
 @router.get("/reports/{key}")

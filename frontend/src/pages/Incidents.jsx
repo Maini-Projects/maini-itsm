@@ -51,20 +51,19 @@ export function IncidentList() {
     <>
       <div className="eyebrow">Incident Management <CountPill of="incidents" /></div>
       <h2 className="title">Incidents</h2>
-      <p className="sub">Create, assign, monitor, resolve and close operational incidents.{me.role === 'employee' && ' You see the incidents you raised.'}</p>
       <div className="toolbar">
         <div className="filters">
           <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search incidents" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search incidents" />
           <select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority">
-            <option value="">All priorities</option>{[...PRIORITIES].reverse().map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            <option value="">Priority</option>{[...PRIORITIES].reverse().map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
-            <option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
+            <option value="">Status</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
           </select>
           {me.role === 'admin' && (
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)} aria-label="Team">
-              <option value="">All teams</option>{(teams.data || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              <option value="">Team</option>{(teams.data || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           )}
           <label><input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} /> Open only</label>

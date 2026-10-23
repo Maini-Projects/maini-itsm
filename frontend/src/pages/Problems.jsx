@@ -37,13 +37,12 @@ export function ProblemList() {
     <>
       <div className="eyebrow">Problem Management <CountPill of="problems" /></div>
       <h2 className="title">Problems & Known Errors</h2>
-      <p className="sub">Investigate recurring incidents, root causes, workarounds and permanent fixes.{me.role === 'employee' && ' You see the problems you raised.'}</p>
       <div className="toolbar">
         <div className="filters">
           <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search problems" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search problems" />
-          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
-          <select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority"><option value="">All priorities</option>{[...PRIORITIES].reverse().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">Status</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+          <select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority"><option value="">Priority</option>{[...PRIORITIES].reverse().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           <label><input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} /> Open only</label>
         </div>
         <button className="btn" onClick={() => setCreating(true)}>+ New Problem</button>

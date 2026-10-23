@@ -12,7 +12,8 @@ from ..rbac import Principal, require_roles
 
 router = APIRouter(tags=["users"])
 
-USER_COLUMNS = """p.id, p.email, p.full_name, p.role, p.status, p.team_id, t.name as team_name, p.created_at"""
+USER_COLUMNS = """p.id, p.email, p.full_name, p.role, p.status, p.team_id, t.name as team_name, p.created_at,
+                p.reports_to, (select m.full_name from profiles m where m.id = p.reports_to) as reports_to_name"""
 
 
 class UserIn(BaseModel):
@@ -21,6 +22,24 @@ class UserIn(BaseModel):
     password: str = Field(min_length=8, max_length=72)
     role: Literal["admin", "manager", "employee"]
     team_id: UUID | None = None
+    reports_to: UUID | None = None
+
+
+def check_reports_to(conn, user_id, manager_id) -> None:
+    """A reporting line must point at an active person, never at oneself, and never loop back."""
+    if manager_id is None:
+        return
+    if user_id is not None and manager_id == user_id:
+        raise api_error(422, "invalid_manager", "Nobody can report to themselves.")
+    if fetch_one(conn, "select 1 as x from profiles where id = %(m)s and status = 'active'", {"m": manager_id}) is None:
+        raise api_error(422, "invalid_manager", "Choose an active person to report to.")
+    seen, current = set(), manager_id
+    while current is not None and current not in seen:  # walk up the chain; meeting the user again means a loop
+        if user_id is not None and current == user_id:
+            raise api_error(422, "reporting_loop", "That would make a reporting loop.")
+        seen.add(current)
+        row = fetch_one(conn, "select reports_to from profiles where id = %(i)s", {"i": current})
+        current = row["reports_to"] if row else None
 
 
 class UserPatch(BaseModel):
@@ -28,6 +47,7 @@ class UserPatch(BaseModel):
     role: Literal["admin", "manager", "employee"] | None = None
     team_id: UUID | None = None
     status: Literal["active", "disabled"] | None = None
+    reports_to: UUID | None = None
 
 
 def _get_user(conn, user_id) -> dict | None:
@@ -67,12 +87,14 @@ def create_user(body: UserIn, _: Principal = Depends(require_roles("admin")), co
                 auth_admin: AuthAdmin = Depends(get_auth_admin)):
     if body.role != "admin" and body.team_id is None:
         raise api_error(422, "team_required", "Support Engineers and Customers must belong to a team.")
+    check_reports_to(conn, None, body.reports_to)
     login_id = auth_admin.create_user(body.email, body.password)
     try:
         conn.execute(
-            """insert into profiles(id, email, full_name, role, team_id)
-               values (%(id)s, %(email)s, %(name)s, %(role)s, %(team)s)""",
-            {"id": login_id, "email": body.email, "name": body.full_name, "role": body.role, "team": body.team_id},
+            """insert into profiles(id, email, full_name, role, team_id, reports_to)
+               values (%(id)s, %(email)s, %(name)s, %(role)s, %(team)s, %(rt)s)""",
+            {"id": login_id, "email": body.email, "name": body.full_name, "role": body.role, "team": body.team_id,
+             "rt": body.reports_to},
         )
     except Exception:
         auth_admin.delete_user(login_id)  # do not leave a login that has no profile
@@ -88,6 +110,8 @@ def update_user(user_id: UUID, body: UserPatch, admin: Principal = Depends(requi
         raise api_error(422, "nothing_to_update", "Send at least one field to change.")
     if user_id == admin.id and (changes.get("role", "admin") != "admin" or changes.get("status", "active") != "active"):
         raise api_error(409, "cannot_modify_self", "You cannot remove your own Administrator access or disable yourself.")
+    if "reports_to" in changes:
+        check_reports_to(conn, user_id, changes["reports_to"])
     sets = ", ".join(f"{col} = %({col})s" for col in changes)  # column names come from the model, not the caller
     updated = fetch_one(conn, f"update profiles set {sets} where id = %(id)s returning id", {**changes, "id": user_id})
     if updated is None:

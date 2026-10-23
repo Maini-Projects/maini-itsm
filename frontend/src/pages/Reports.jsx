@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
+import Timeline from '../components/Timeline'
 import { Empty, ErrorBox, Loading, fmtDate, priorityLabel, useAction, useFetch } from '../components/ui'
 
 const DATE_KEY = /(_at|_start|_end)$/
@@ -51,33 +52,11 @@ function BarChart({ chart, selected, onSelect }) {
 }
 
 export function Reports() {
-  const navigate = useNavigate()
-  const { data, error, loading } = useFetch(() => api.get('/reports'))
-  const [q, setQ] = useState('')
-  const [cat, setCat] = useState('')
-  const items = (data || []).filter((r) => (!cat || r.category === cat) && r.title.toLowerCase().includes(q.toLowerCase()))
-  const cats = [...new Set((data || []).map((r) => r.category))]
   return (
     <>
       <div className="eyebrow">Reporting & Dashboards</div>
-      <h2 className="title">Standard Reports</h2>
-      <p className="sub">Live operational reports. Open a report to see the numbers, then download it as a CSV file (opens in Excel) or a PDF.</p>
-      <div className="toolbar">
-        <div className="filters">
-          <input placeholder="Search reports" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search reports" />
-          <select value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Category"><option value="">All categories</option>{cats.map((c) => <option key={c}>{c}</option>)}</select>
-        </div>
-      </div>
-      <ErrorBox error={error} />
-      {loading && <Loading variant="bars" />}
-      <div className="reports">
-        {items.map((r) => (
-          <button key={r.key} className={`report ${r.available ? '' : 'off'}`} onClick={() => r.available && navigate(`/reports/${r.key}`)} aria-disabled={!r.available}>
-            <b>{r.title}</b><span>{r.category}</span>{!r.available && <span>Not available yet: {r.reason}</span>}
-          </button>
-        ))}
-      </div>
-      {data && !items.length && <Empty>No reports match.</Empty>}
+      <h2 className="title">Reports</h2>
+      <Timeline />
     </>
   )
 }

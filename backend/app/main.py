@@ -8,8 +8,8 @@ from fastapi.responses import JSONResponse
 from . import db
 from .config import get_settings
 from .errors import register_error_handlers
-from .routers import (approvals, attachments, audit, auth_routes, changes, dashboard, defects, incidents, problems,
-                      projects, reference, releases, reports, users)
+from .routers import (approvals, attachments, audit, chat, auth_routes, changes, dashboard, defects, incidents, problems,
+                      kb, projects, reference, releases, reports, search, users)
 
 
 @asynccontextmanager
@@ -44,7 +44,7 @@ async def reject_oversized_uploads(request: Request, call_next):
     return await call_next(request)
 
 for module in (auth_routes, reference, users, incidents, problems, defects, changes, releases, approvals, dashboard,
-               reports, audit, attachments, projects):
+               reports, audit, attachments, projects, search, kb, chat):
     app.include_router(module.router, prefix=API)
 
 

@@ -51,23 +51,22 @@ export function DefectList() {
     <>
       <div className="eyebrow">Defect Management <CountPill of="defects" /></div>
       <h2 className="title">Defects</h2>
-      <p className="sub">Log, assign, track, fix and close defects found in an application.{me.role === 'employee' && ' You see the defects you raised.'}</p>
       <div className="toolbar">
         <div className="filters">
           <ProjectFilter cust={cust} value={projectId} onChange={setProjectId} />
           <input placeholder="Search defects" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search defects" />
           <select value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Severity">
-            <option value="">All severities</option>{SEVERITIES.map((s) => <option key={s}>{s}</option>)}
+            <option value="">Severity</option>{SEVERITIES.map((s) => <option key={s}>{s}</option>)}
           </select>
           <select value={environment} onChange={(e) => setEnvironment(e.target.value)} aria-label="Environment">
-            <option value="">All environments</option>{ENVIRONMENTS.map((s) => <option key={s}>{s}</option>)}
+            <option value="">Environment</option>{ENVIRONMENTS.map((s) => <option key={s}>{s}</option>)}
           </select>
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
-            <option value="">All statuses</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
+            <option value="">Status</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
           </select>
           {me.role === 'admin' && (
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)} aria-label="Team">
-              <option value="">All teams</option>{(teams.data || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              <option value="">Team</option>{(teams.data || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           )}
           <label><input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} /> Open only</label>

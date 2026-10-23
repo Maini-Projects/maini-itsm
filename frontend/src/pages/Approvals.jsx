@@ -23,9 +23,6 @@ export default function Approvals() {
     <>
       <div className="eyebrow">Governance <CountPill of="approvals" /></div>
       <h2 className="title">Approval Queue</h2>
-      <p className="sub">
-        {me.role === 'admin' ? 'Changes, releases and new user sign-ups waiting for your decision.' : 'The status of the changes and releases you raised. An Administrator decides them.'}
-      </p>
       <div className="toolbar">
         <div className="filters">
           {['pending', 'approved', 'rejected', 'all'].map((s) => (

@@ -1,31 +1,38 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { Badge, ErrorBox, Field, FormModal, Loading, fmtTarget, priorityLabel, useFetch, useToast } from '../components/ui'
+import { Badge, ErrorBox, Field, FormModal, Loading, fmtShort, fmtTarget, priorityLabel, useFetch, useToast } from '../components/ui'
 
 const LEVELS = ['High', 'Medium', 'Low']
 
 // ---- services ------------------------------------------------------------------------------
 export function Services() {
   const { me } = useAuth()
+  const admin = me.role === 'admin'
   const { data, error, loading, reload } = useFetch(() => api.get('/services'))
   const [edit, setEdit] = useState(null) // null | 'new' | service
   return (
     <>
-      <div className="eyebrow">Applications</div>
-      <h2 className="title">Supported Applications</h2>
-      <p className="sub">Ownership, criticality and live incident counts for each supported application.</p>
-      {me.role === 'admin' && <div className="toolbar"><span /><button className="btn" onClick={() => setEdit('new')}>+ New Application</button></div>}
+      <div className="eyebrow">Administration</div>
+      <h2 className="title">Applications</h2>
+      <div className="toolbar"><span />{admin && <button className="btn" onClick={() => setEdit('new')}>+ New Application</button>}</div>
       <ErrorBox error={error} />
-      {loading && !data && <Loading />}
-      <div className="reports">
-        {data?.map((s) => (
-          <div className="report" key={s.id} style={{ cursor: me.role === 'admin' ? 'pointer' : 'default', opacity: s.active ? 1 : 0.6 }} onClick={() => me.role === 'admin' && setEdit(s)}>
-            <b>{s.name} {!s.active && <Badge tone="gray">Inactive</Badge>}</b>
-            <span>{s.description || 'No description'}</span>
-            <span>{s.owner_team_name || 'No owner team'} · {s.criticality} criticality · {s.open_incidents} open incident{Number(s.open_incidents) === 1 ? '' : 's'}</span>
-          </div>
-        ))}
+      <div className="card table">
+        <table>
+          <thead><tr><th>Application name</th><th>Details</th><th>Created</th>{admin && <th />}</tr></thead>
+          <tbody>
+            {data?.map((s) => (
+              <tr key={s.id} style={{ opacity: s.active ? 1 : 0.6 }}>
+                <td><b>{s.name}</b>{!s.active && <> <Badge tone="gray">Inactive</Badge></>}</td>
+                <td>{s.description || '—'}</td>
+                <td>{fmtShort(s.created_at)}</td>
+                {admin && <td><button className="btn2" onClick={() => setEdit(s)}>Edit</button></td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {loading && !data && <Loading />}
+        {data && !data.length && <div className="empty">No applications yet.</div>}
       </div>
       {edit && <ServiceModal service={edit === 'new' ? null : edit} onClose={() => setEdit(null)} onSaved={reload} />}
     </>
@@ -47,10 +54,10 @@ function ServiceModal({ service, onClose, onSaved }) {
   return (
     <FormModal title={service ? 'Edit application' : 'New application'} onClose={onClose} onSubmit={submit} width={560}>
       <div className="form">
-        <Field label="Name" wide><input value={f.name} onChange={set('name')} required autoFocus /></Field>
+        <Field label="Application name" wide><input value={f.name} onChange={set('name')} required autoFocus /></Field>
         <Field label="Owner team"><select value={f.owner_team_id} onChange={set('owner_team_id')}><option value="">None</option>{(teams.data || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
         <Field label="Criticality"><select value={f.criticality} onChange={set('criticality')}>{LEVELS.map((l) => <option key={l}>{l}</option>)}</select></Field>
-        <Field label="Description" wide><textarea value={f.description} onChange={set('description')} /></Field>
+        <Field label="Details" wide><textarea value={f.description} onChange={set('description')} /></Field>
         <Field label="Status"><label className="checkrow"><input type="checkbox" checked={f.active} onChange={set('active')} /> Active (can be chosen on new records)</label></Field>
       </div>
     </FormModal>
@@ -70,7 +77,6 @@ export function Sla() {
     <>
       <div className="eyebrow">SLA Management</div>
       <h2 className="title">SLA Policies & Performance</h2>
-      <p className="sub">Response and resolution targets by priority, and how well they are being met this month.</p>
       <ErrorBox error={sla.error || summary.error} />
       {(sla.loading || summary.loading) && <Loading />}
       {sla.data && summary.data && (

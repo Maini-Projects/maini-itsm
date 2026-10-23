@@ -15,8 +15,8 @@ router = APIRouter(tags=["projects"])
 def projects_for(conn, user: Principal) -> list[dict]:
     """Administrators see every project; everyone else the ones assigned to them."""
     if user.role == "admin":
-        return fetch_all(conn, "select id, name from projects order by name")
-    return fetch_all(conn, """select p.id, p.name from projects p join user_projects up on up.project_id = p.id
+        return fetch_all(conn, "select id, name, project_name, is_internal from projects order by name")
+    return fetch_all(conn, """select p.id, p.name, p.project_name, p.is_internal from projects p join user_projects up on up.project_id = p.id
                                where up.user_id = %(u)s order by p.name""", {"u": user.id})
 
 
@@ -26,18 +26,48 @@ def list_projects(user: Principal = Depends(current_user), conn=Depends(get_conn
 
 
 class ProjectIn(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=120)                 # the customer's name
+    project_name: str | None = Field(default=None, max_length=120)  # optional project name
+    is_internal: bool = False  # an internal organization: reporting lines apply
+
+
+class ProjectPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    project_name: str | None = Field(default=None, max_length=120)
+    is_internal: bool | None = None
+
+
+@router.patch("/projects/{project_id}")
+def edit_project(project_id: UUID, body: ProjectPatch, _: Principal = Depends(require_roles("admin")),
+                 conn=Depends(get_conn)):
+    """Administrators edit a customer's details. The customer's database schema keeps its original name."""
+    fields = body.model_dump(exclude_unset=True)
+    if "name" in fields:
+        fields["name"] = fields["name"].strip()
+        if fetch_one(conn, "select 1 as x from projects where lower(name) = lower(%(n)s) and id <> %(i)s",
+                     {"n": fields["name"], "i": project_id}):
+            raise api_error(409, "project_exists", "A customer with that name already exists.")
+    if "project_name" in fields:
+        fields["project_name"] = (fields["project_name"] or "").strip() or None
+    if not fields:
+        raise api_error(422, "nothing_to_update", "Send at least one field to change.")
+    sets = ", ".join(f"{c} = %({c})s" for c in fields)  # column names come from the model, not the caller
+    row = fetch_one(conn, f"update projects set {sets} where id = %(i)s returning id, name, project_name, is_internal",
+                    {**fields, "i": project_id})
+    if row is None:
+        raise api_error(404, "not_found", "Customer not found.")
+    return row
 
 
 @router.post("/projects", status_code=201)
 def create_project(body: ProjectIn, actor: Principal = Depends(require_roles("admin")), conn=Depends(get_conn)):
     name = body.name.strip()
     if fetch_one(conn, "select 1 as x from projects where lower(name) = lower(%(n)s)", {"n": name}):
-        raise api_error(409, "project_exists", "A project with that name already exists.")
+        raise api_error(409, "project_exists", "A customer with that name already exists.")
     taken = {r["schema_name"] for r in fetch_all(conn, "select schema_name from projects where schema_name is not null")}
     schema = schema_name_for(name, taken)
-    project = fetch_one(conn, "insert into projects(name, schema_name) values (%(n)s, %(s)s) returning id, name",
-                        {"n": name, "s": schema})
+    project = fetch_one(conn, "insert into projects(name, schema_name, project_name, is_internal) values (%(n)s, %(s)s, %(p)s, %(x)s) returning id, name, project_name, is_internal",
+                        {"n": name, "s": schema, "p": (body.project_name or "").strip() or None, "x": body.is_internal})
     provision(conn, schema, project["id"])  # the customer's own set of tables, created right now
     if actor.schema_name:  # back to the customer this request started in
         use_schema(conn, actor.schema_name)
@@ -99,7 +129,7 @@ def projects_overview(actor: Principal = Depends(require_roles("admin", "manager
     mine = [p["id"] for p in projects_for(conn, actor)]
     return fetch_all(
         conn,
-        """select p.id, p.name, p.created_at,
+        """select p.id, p.name, p.project_name, p.is_internal, p.created_at,
                   count(*) filter (where u.role = 'manager') as support_engineers,
                   count(*) filter (where u.role = 'employee') as customers
              from projects p
@@ -141,3 +171,20 @@ def set_project_members(project_id: UUID, body: MembersIn,
     for uid in chosen:
         conn.execute("insert into user_projects(user_id, project_id) values (%(u)s, %(p)s)", {"u": uid, "p": project_id})
     return {"user_ids": list(chosen)}
+
+
+@router.get("/org/{project_id}")
+def org_chart(project_id: UUID, actor: Principal = Depends(require_roles("admin", "manager")), conn=Depends(get_conn)):
+    """Everyone working for an internal customer, with who they report to. External customers have no org chart."""
+    project = next((p for p in projects_for(conn, actor) if p["id"] == project_id), None)
+    if project is None:
+        raise api_error(404, "not_found", "Customer not found.")
+    if not project["is_internal"]:
+        raise api_error(409, "not_internal", "Reporting lines only apply to internal organizations.")
+    people = fetch_all(
+        conn,
+        """select p.id, p.full_name, p.email, p.role, t.name as team_name, p.reports_to
+             from profiles p join user_projects up on up.user_id = p.id and up.project_id = %(p)s
+             left join teams t on t.id = p.team_id
+            where p.status = 'active' order by p.full_name""", {"p": project_id})
+    return {"project": project, "people": people}

@@ -18,12 +18,11 @@ export default function Admin() {
   return (
     <>
       <div className="eyebrow">Administration</div>
-      <h2 className="title">Users & Teams</h2>
-      <p className="sub">Create accounts, set roles and teams, disable access and reset passwords. Each team has at most one Support Engineer.</p>
+      <h2 className="title">Users and access</h2>
       <div className="toolbar">
         <div className="filters">
           <input placeholder="Search name or email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search users" />
-          <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role"><option value="">All roles</option>{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select>
+          <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role"><option value="">Role</option>{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select>
         </div>
         <button className="btn" onClick={() => setModal({ kind: 'new' })}>+ New User</button>
       </div>
@@ -35,11 +34,11 @@ export default function Admin() {
       )}
       <div className="card table">
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Team</th><th>Status</th><th /></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Team</th><th>Reports to</th><th>Status</th><th /></tr></thead>
           <tbody>
             {data?.map((u) => (
               <tr key={u.id}>
-                <td><b>{u.full_name}</b>{u.id === me.id && <> <Badge tone="blue">You</Badge></>}</td><td>{u.email}</td><td>{roleLabel(u.role)}</td><td>{u.team_name || '—'}</td>
+                <td><b>{u.full_name}</b>{u.id === me.id && <> <Badge tone="blue">You</Badge></>}</td><td>{u.email}</td><td>{roleLabel(u.role)}</td><td>{u.team_name || '—'}</td><td>{u.reports_to_name || '—'}</td>
                 <td><Badge tone={u.status === 'active' ? 'green' : u.status === 'pending' ? 'amber' : 'gray'}>{u.status}</Badge></td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   <button className="btn2" onClick={() => setModal({ kind: 'edit', user: u })}>Edit</button>{' '}
@@ -61,7 +60,7 @@ export default function Admin() {
 
 function UserModal({ user, self, teams, onClose, onSaved }) {
   const toast = useToast()
-  const [f, setF] = useState({ full_name: user?.full_name || '', email: user?.email || '', password: '', role: user?.role || 'employee', team_id: user?.team_id || '', status: user?.status || 'active' })
+  const [f, setF] = useState({ full_name: user?.full_name || '', email: user?.email || '', password: '', role: user?.role || 'employee', team_id: user?.team_id || '', status: user?.status || 'active', reports_to: user?.reports_to || '' })
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
   const needsTeam = f.role !== 'admin'
   const projects = useFetch(() => api.get('/projects'))
@@ -70,11 +69,13 @@ function UserModal({ user, self, teams, onClose, onSaved }) {
   const [loaded, setLoaded] = useState(!user)
   useEffect(() => { if (user) api.get(`/users/${user.id}/projects`).then((ids) => { setPicked(ids); setLoaded(true) }).catch(() => setLoaded(true)) }, [user])
   const canHaveProjects = true
+  const everyone = useFetch(() => api.get('/users'))
+  const anyInternal = (projects.data || []).some((p) => p.is_internal && picked.includes(p.id))
   const submit = async () => {
     if (needsTeam && !f.team_id) throw new Error('Choose a team for Support Engineers and Customers.')
     const team_id = f.team_id || null // optional for Administrators
-    if (user) await api.patch(`/users/${user.id}`, { full_name: f.full_name, role: f.role, team_id, status: f.status })
-    else await api.post('/users', { email: f.email.trim(), full_name: f.full_name, password: f.password, role: f.role, team_id })
+    if (user) await api.patch(`/users/${user.id}`, { full_name: f.full_name, role: f.role, team_id, status: f.status, reports_to: f.reports_to || null })
+    else await api.post('/users', { email: f.email.trim(), full_name: f.full_name, password: f.password, role: f.role, team_id, reports_to: f.reports_to || null })
     const saved = user || (await api.get('/users', { q: f.email.trim() })).find((u) => u.email.toLowerCase() === f.email.trim().toLowerCase())
     if (saved && loaded) await api.put(`/users/${saved.id}/projects`, { project_ids: canHaveProjects ? picked : [] })
     toast(user ? 'User updated.' : 'User created.')
@@ -95,6 +96,14 @@ function UserModal({ user, self, teams, onClose, onSaved }) {
         <Field label="Projects" wide>
           <ProjectPicker projects={projects.data || []} picked={picked} onChange={setPicked} />
         </Field>
+        {(anyInternal || f.reports_to) && (
+          <Field label="Reports to" wide>
+            <select value={f.reports_to} onChange={set('reports_to')}>
+              <option value="">No one</option>
+              {(everyone.data || []).filter((u) => u.status === 'active' && u.id !== user?.id).map((u) => <option key={u.id} value={u.id}>{u.full_name} ({roleLabel(u.role)})</option>)}
+            </select>
+          </Field>
+        )}
         {user && <Field label="Status"><select value={f.status} onChange={set('status')} disabled={self}><option value="active">active</option><option value="disabled">disabled</option></select></Field>}
       </div>
     </FormModal>
